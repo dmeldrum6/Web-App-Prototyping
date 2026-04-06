@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,150 +9,475 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify-html.js"></script>
     <title>Web App Prototyping</title>
     <style>
-        /* Main layout styles */
+        /* ── Theme variables ─────────────────────────────────────────────── */
+        :root {
+            --bg-app:         #f0f2f5;
+            --bg-pane:        #ffffff;
+            --bg-section:     #f6f8fa;
+            --bg-textarea:    #ffffff;
+            --bg-btn:         #f0f2f5;
+            --bg-btn-hover:   #e2e5ea;
+            --bg-run:         #0969da;
+            --bg-run-hover:   #0550ae;
+            --border:         #d0d7de;
+            --text-primary:   #1f2328;
+            --text-secondary: #656d76;
+            --text-accent:    #0969da;
+            --radius:         6px;
+            --transition:     0.18s ease;
+        }
+
+        [data-theme="dark"] {
+            --bg-app:         #0d1117;
+            --bg-pane:        #161b22;
+            --bg-section:     #1c2128;
+            --bg-textarea:    #0d1117;
+            --bg-btn:         #21262d;
+            --bg-btn-hover:   #30363d;
+            --bg-run:         #1f6feb;
+            --bg-run-hover:   #388bfd;
+            --border:         #30363d;
+            --text-primary:   #e6edf3;
+            --text-secondary: #8b949e;
+            --text-accent:    #58a6ff;
+        }
+
+        /* ── Reset / Base ────────────────────────────────────────────────── */
+        *, *::before, *::after { box-sizing: border-box; }
+
         body {
             display: flex;
+            flex-direction: column;
             margin: 0;
             height: 100vh;
-            font-family: Arial, sans-serif;
-            background-color: #f0f0f0;
-        }
-
-        /* Editor styles */
-        .editor {
-            width: 50%;
-            display: flex;
-            flex-direction: column;
-            padding: 10px;
-            box-sizing: border-box;
-            background-color: #f0f0f0;
-        }
-        .editor textarea {
-            width: 100%;
-            flex: 1;
-            margin-bottom: 10px;
-            padding: 10px;
-            box-sizing: border-box;
-            font-family: monospace;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
             font-size: 14px;
-            resize: none;
+            background: var(--bg-app);
+            color: var(--text-primary);
+            transition: background var(--transition), color var(--transition);
         }
 
-        /* Output area styles */
-        .output {
+        /* ── App Header ──────────────────────────────────────────────────── */
+        .app-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            height: 48px;
+            background: var(--bg-pane);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+            transition: background var(--transition), border-color var(--transition);
+        }
+
+        .app-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.02em;
+        }
+
+        .app-title span {
+            color: var(--text-accent);
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .shortcut-hint {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .theme-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            background: var(--bg-btn);
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: background var(--transition), border-color var(--transition), color var(--transition);
+        }
+
+        .theme-toggle:hover {
+            background: var(--bg-btn-hover);
+        }
+
+        .theme-toggle svg {
+            width: 13px;
+            height: 13px;
+            flex-shrink: 0;
+        }
+
+        /* ── Main Split ──────────────────────────────────────────────────── */
+        .app-main {
+            display: flex;
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        /* ── Editor Pane ─────────────────────────────────────────────────── */
+        .editor-pane {
             width: 50%;
             display: flex;
             flex-direction: column;
-            padding: 10px;
-            box-sizing: border-box;
-            border-left: 1px solid #ddd;
+            background: var(--bg-pane);
+            border-right: 1px solid var(--border);
+            overflow: hidden;
+            transition: background var(--transition), border-color var(--transition);
         }
 
-        /* Button container styles */
-        .button-container {
+        .editor-sections {
+            flex: 1;
             display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
-        }
-        .run-btn, .download-btn {
-            padding: 10px;
-            font-size: 16px;
-            cursor: pointer;
-            width: 48%;
+            flex-direction: column;
+            padding: 10px 10px 0;
+            gap: 8px;
+            min-height: 0;
+            overflow: hidden;
         }
 
-        /* Output iframe styles */
+        .editor-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            transition: border-color var(--transition);
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 5px 8px;
+            background: var(--bg-section);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+            transition: background var(--transition), border-color var(--transition);
+        }
+
+        .section-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-secondary);
+        }
+
+        .format-btn {
+            padding: 2px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            background: var(--bg-btn);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 11px;
+            transition: background var(--transition), color var(--transition), border-color var(--transition);
+        }
+
+        .format-btn:hover {
+            background: var(--bg-btn-hover);
+            color: var(--text-primary);
+        }
+
+        .editor-section textarea {
+            flex: 1;
+            width: 100%;
+            padding: 10px;
+            border: none;
+            outline: none;
+            font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            resize: none;
+            background: var(--bg-textarea);
+            color: var(--text-primary);
+            transition: background var(--transition), color var(--transition);
+        }
+
+        .editor-section textarea::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.5;
+        }
+
+        /* ── Action Bar ──────────────────────────────────────────────────── */
+        .action-bar {
+            display: flex;
+            gap: 8px;
+            padding: 10px;
+            background: var(--bg-pane);
+            border-top: 1px solid var(--border);
+            flex-shrink: 0;
+            transition: background var(--transition), border-color var(--transition);
+        }
+
+        .run-btn {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            padding: 9px 16px;
+            border-radius: var(--radius);
+            border: none;
+            background: var(--bg-run);
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background var(--transition), transform 0.1s;
+        }
+
+        .run-btn:hover { background: var(--bg-run-hover); }
+        .run-btn:active { transform: scale(0.98); }
+
+        .run-btn svg { flex-shrink: 0; }
+
+        .download-btn {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            padding: 9px 16px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            background: var(--bg-btn);
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background var(--transition), border-color var(--transition), color var(--transition);
+        }
+
+        .download-btn:hover { background: var(--bg-btn-hover); }
+        .download-btn svg { flex-shrink: 0; }
+
+        /* ── Output Pane ─────────────────────────────────────────────────── */
+        .output-pane {
+            width: 50%;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .output-header {
+            display: flex;
+            align-items: center;
+            padding: 6px 12px;
+            background: var(--bg-pane);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+            transition: background var(--transition), border-color var(--transition);
+        }
+
+        .output-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-secondary);
+        }
+
         iframe {
             width: 100%;
             flex: 1;
-            border: 1px solid black;
-            background: #fff;
+            border: none;
+            background: #ffffff;
             min-height: 0;
         }
 
-        /* Utility button styles */
-        .util-btn {
-            width: 20%;
-            margin-bottom: 4px;
+        /* ── Console (always dark) ───────────────────────────────────────── */
+        .console-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 5px 12px;
+            background: #1e2228;
+            border-top: 1px solid #333b45;
+            flex-shrink: 0;
         }
 
-        /* Console output styles */
+        .console-title {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #606978;
+        }
+
+        .clear-btn {
+            padding: 2px 8px;
+            border-radius: 4px;
+            border: 1px solid #3a414a;
+            background: #252b33;
+            color: #8b949e;
+            cursor: pointer;
+            font-size: 11px;
+            transition: background 0.15s, color 0.15s;
+        }
+
+        .clear-btn:hover {
+            background: #333b45;
+            color: #e6edf3;
+        }
+
         .console {
-            width: 100%;
-            height: 150px;
-            padding: 5px;
-            box-sizing: border-box;
-            background-color: #1e1e1e;
-            font-family: monospace;
-            font-size: 13px;
+            height: 140px;
+            padding: 8px 12px;
+            background: #0d1117;
+            font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+            font-size: 12px;
+            line-height: 1.55;
             overflow-y: auto;
             flex-shrink: 0;
         }
-        .console .log   { color: #00ff00; }
-        .console .warn  { color: #ffcc00; }
-        .console .error { color: #ff5555; }
 
-        .console-toolbar {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-top: 5px;
-            flex-shrink: 0;
-        }
-        .clear-btn {
-            padding: 5px 10px;
-            font-size: 14px;
-            cursor: pointer;
-        }
-        .console-label {
-            font-size: 13px;
-            color: #555;
-        }
+        .console .log   { color: #3fb950; }
+        .console .warn  { color: #d29922; }
+        .console .error { color: #f85149; }
 
-        /* Keyboard shortcut hint */
-        .shortcut-hint {
-            font-size: 11px;
-            color: #888;
-            text-align: right;
-            margin-bottom: 2px;
-        }
+        .console::-webkit-scrollbar { width: 6px; }
+        .console::-webkit-scrollbar-track { background: #0d1117; }
+        .console::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
     </style>
 </head>
 <body>
-    <!-- Editor section -->
-    <div class="editor">
-        <!-- HTML editor -->
-        <button class="util-btn" onclick="htmlfix()">Format HTML</button>
-        <textarea id="html" placeholder="HTML" spellcheck="false"></textarea>
 
-        <!-- CSS editor -->
-        <button class="util-btn" onclick="cssfix()">Format CSS</button>
-        <textarea id="css" placeholder="CSS" spellcheck="false"></textarea>
-
-        <!-- JavaScript editor -->
-        <button class="util-btn" onclick="jsfix()">Format JavaScript</button>
-        <textarea id="js" placeholder="JavaScript" spellcheck="false"></textarea>
-
-        <!-- Action buttons -->
-        <div class="shortcut-hint">Ctrl+Enter to run</div>
-        <div class="button-container">
-            <button class="run-btn" onclick="runCode()">Run</button>
-            <button class="download-btn" onclick="downloadHTML()">Download HTML</button>
+    <!-- App Header -->
+    <header class="app-header">
+        <div class="app-title">Web App <span>Prototyping</span></div>
+        <div class="header-right">
+            <span class="shortcut-hint">Ctrl+Enter to run</span>
+            <button class="theme-toggle" onclick="toggleTheme()" id="theme-toggle-btn">
+                <!-- Icon swapped by JS; default = moon (switch to dark) -->
+                <svg id="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                </svg>
+                <span id="theme-label">Dark</span>
+            </button>
         </div>
-    </div>
+    </header>
 
-    <!-- Output section -->
-    <div class="output">
-        <b>Output:</b>
-        <iframe id="output"></iframe>
-        <div class="console-toolbar">
-            <button class="clear-btn" onclick="clearConsole()">Clear Console</button>
-            <span class="console-label">Console</span>
+    <!-- Main Split Layout -->
+    <main class="app-main">
+
+        <!-- Editor Pane -->
+        <div class="editor-pane">
+            <div class="editor-sections">
+
+                <div class="editor-section">
+                    <div class="section-header">
+                        <span class="section-label">HTML</span>
+                        <button class="format-btn" onclick="htmlfix()">Format</button>
+                    </div>
+                    <textarea id="html" placeholder="<!-- HTML -->" spellcheck="false"></textarea>
+                </div>
+
+                <div class="editor-section">
+                    <div class="section-header">
+                        <span class="section-label">CSS</span>
+                        <button class="format-btn" onclick="cssfix()">Format</button>
+                    </div>
+                    <textarea id="css" placeholder="/* CSS */" spellcheck="false"></textarea>
+                </div>
+
+                <div class="editor-section">
+                    <div class="section-header">
+                        <span class="section-label">JavaScript</span>
+                        <button class="format-btn" onclick="jsfix()">Format</button>
+                    </div>
+                    <textarea id="js" placeholder="// JavaScript" spellcheck="false"></textarea>
+                </div>
+
+            </div>
+
+            <div class="action-bar">
+                <button class="run-btn" onclick="runCode()">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5,3 19,12 5,21"/>
+                    </svg>
+                    Run
+                </button>
+                <button class="download-btn" onclick="downloadHTML()">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="8,17 12,21 16,17"/>
+                        <line x1="12" y1="12" x2="12" y2="21"/>
+                        <path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/>
+                    </svg>
+                    Download HTML
+                </button>
+            </div>
         </div>
-        <div class="console" id="console"></div>
-    </div>
+
+        <!-- Output Pane -->
+        <div class="output-pane">
+            <div class="output-header">
+                <span class="output-label">Output</span>
+            </div>
+            <iframe id="output"></iframe>
+            <div class="console-header">
+                <span class="console-title">Console</span>
+                <button class="clear-btn" onclick="clearConsole()">Clear</button>
+            </div>
+            <div class="console" id="console"></div>
+        </div>
+
+    </main>
 
     <script>
+        // ── Theme ─────────────────────────────────────────────────────────────
+        const MOON_PATH = 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z';
+        const SUN_PATHS = [
+            { tag: 'circle', attrs: 'cx="12" cy="12" r="5"' },
+            { tag: 'line',   attrs: 'x1="12" y1="1" x2="12" y2="3"' },
+            { tag: 'line',   attrs: 'x1="12" y1="21" x2="12" y2="23"' },
+            { tag: 'line',   attrs: 'x1="4.22" y1="4.22" x2="5.64" y2="5.64"' },
+            { tag: 'line',   attrs: 'x1="18.36" y1="18.36" x2="19.78" y2="19.78"' },
+            { tag: 'line',   attrs: 'x1="1" y1="12" x2="3" y2="12"' },
+            { tag: 'line',   attrs: 'x1="21" y1="12" x2="23" y2="12"' },
+            { tag: 'line',   attrs: 'x1="4.22" y1="19.78" x2="5.64" y2="18.36"' },
+            { tag: 'line',   attrs: 'x1="18.36" y1="5.64" x2="19.78" y2="4.22"' },
+        ];
+
+        function setThemeIcon(isDark) {
+            const icon = document.getElementById('theme-icon');
+            icon.innerHTML = isDark
+                ? SUN_PATHS.map(p => `<${p.tag} ${p.attrs}/>`).join('')
+                : `<path d="${MOON_PATH}"/>`;
+            document.getElementById('theme-label').textContent = isDark ? 'Light' : 'Dark';
+        }
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            const isDark = html.getAttribute('data-theme') === 'dark';
+            const next = isDark ? 'light' : 'dark';
+            html.setAttribute('data-theme', next);
+            setThemeIcon(!isDark);
+            localStorage.setItem('wap_theme', next);
+        }
+
+        // Apply saved or system theme on load
+        (function initTheme() {
+            const saved = localStorage.getItem('wap_theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const theme = saved || (prefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', theme);
+            setThemeIcon(theme === 'dark');
+        })();
+
         // ── State persistence via localStorage ────────────────────────────────
         const STORAGE_KEYS = { html: 'wap_html', css: 'wap_css', js: 'wap_js' };
 
