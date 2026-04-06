@@ -7,4 +7,4 @@ Enter your HTML/CSS/JavaScript on screen and "RUN" to see it rendered in the out
 
 Use the Download HTML button to download the Output into a single HTML file.
 
-![image](https://github.com/user-attachments/assets/44ee0f3a-d466-49ce-b06e-0224bf3e4760)
+<img width="1918" height="911" alt="image" src="https://github.com/user-attachments/assets/a0dba5c8-ab48-4fdd-a807-695b25e56238" />
