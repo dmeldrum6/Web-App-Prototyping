@@ -17,7 +17,7 @@
             font-family: Arial, sans-serif;
             background-color: #f0f0f0;
         }
-        
+
         /* Editor styles */
         .editor {
             width: 50%;
@@ -29,22 +29,25 @@
         }
         .editor textarea {
             width: 100%;
-            height: 33%;
+            flex: 1;
             margin-bottom: 10px;
             padding: 10px;
             box-sizing: border-box;
             font-family: monospace;
             font-size: 14px;
+            resize: none;
         }
-        
+
         /* Output area styles */
         .output {
             width: 50%;
+            display: flex;
+            flex-direction: column;
             padding: 10px;
             box-sizing: border-box;
             border-left: 1px solid #ddd;
         }
-        
+
         /* Button container styles */
         .button-container {
             display: flex;
@@ -57,36 +60,61 @@
             cursor: pointer;
             width: 48%;
         }
-        
+
         /* Output iframe styles */
         iframe {
             width: 100%;
-            height: calc(100% - 200px);
+            flex: 1;
             border: 1px solid black;
             background: #fff;
+            min-height: 0;
         }
-        
+
         /* Utility button styles */
         .util-btn {
             width: 20%;
+            margin-bottom: 4px;
         }
-        
+
         /* Console output styles */
         .console {
             width: 100%;
             height: 150px;
             padding: 5px;
             box-sizing: border-box;
-            background-color: #000;
-            color: #00ff00;
+            background-color: #1e1e1e;
             font-family: monospace;
+            font-size: 13px;
             overflow-y: auto;
+            flex-shrink: 0;
+        }
+        .console .log   { color: #00ff00; }
+        .console .warn  { color: #ffcc00; }
+        .console .error { color: #ff5555; }
+
+        .console-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 5px;
+            flex-shrink: 0;
         }
         .clear-btn {
-            padding: 5px;
+            padding: 5px 10px;
             font-size: 14px;
             cursor: pointer;
-            margin-top: 5px;
+        }
+        .console-label {
+            font-size: 13px;
+            color: #555;
+        }
+
+        /* Keyboard shortcut hint */
+        .shortcut-hint {
+            font-size: 11px;
+            color: #888;
+            text-align: right;
+            margin-bottom: 2px;
         }
     </style>
 </head>
@@ -95,48 +123,104 @@
     <div class="editor">
         <!-- HTML editor -->
         <button class="util-btn" onclick="htmlfix()">Format HTML</button>
-        <textarea id="html" placeholder="HTML"></textarea>
-        
+        <textarea id="html" placeholder="HTML" spellcheck="false"></textarea>
+
         <!-- CSS editor -->
         <button class="util-btn" onclick="cssfix()">Format CSS</button>
-        <textarea id="css" placeholder="CSS"></textarea>
-        
+        <textarea id="css" placeholder="CSS" spellcheck="false"></textarea>
+
         <!-- JavaScript editor -->
         <button class="util-btn" onclick="jsfix()">Format JavaScript</button>
-        <textarea id="js" placeholder="JavaScript"></textarea>
-        
+        <textarea id="js" placeholder="JavaScript" spellcheck="false"></textarea>
+
         <!-- Action buttons -->
+        <div class="shortcut-hint">Ctrl+Enter to run</div>
         <div class="button-container">
             <button class="run-btn" onclick="runCode()">Run</button>
             <button class="download-btn" onclick="downloadHTML()">Download HTML</button>
         </div>
     </div>
-    
+
     <!-- Output section -->
     <div class="output">
-        <b>Output:</b><br/>
+        <b>Output:</b>
         <iframe id="output"></iframe>
-        <button class="clear-btn" onclick="clearConsole()">Clear Console</button>
+        <div class="console-toolbar">
+            <button class="clear-btn" onclick="clearConsole()">Clear Console</button>
+            <span class="console-label">Console</span>
+        </div>
         <div class="console" id="console"></div>
     </div>
 
     <script>
-        // Function to run the code in the iframe
+        // ── State persistence via localStorage ────────────────────────────────
+        const STORAGE_KEYS = { html: 'wap_html', css: 'wap_css', js: 'wap_js' };
+
+        function saveState() {
+            localStorage.setItem(STORAGE_KEYS.html, document.getElementById('html').value);
+            localStorage.setItem(STORAGE_KEYS.css,  document.getElementById('css').value);
+            localStorage.setItem(STORAGE_KEYS.js,   document.getElementById('js').value);
+        }
+
+        function loadState() {
+            const html = localStorage.getItem(STORAGE_KEYS.html);
+            const css  = localStorage.getItem(STORAGE_KEYS.css);
+            const js   = localStorage.getItem(STORAGE_KEYS.js);
+            if (html !== null) document.getElementById('html').value = html;
+            if (css  !== null) document.getElementById('css').value  = css;
+            if (js   !== null) document.getElementById('js').value   = js;
+        }
+
+        // Persist on every change
+        ['html', 'css', 'js'].forEach(id => {
+            document.getElementById(id).addEventListener('input', saveState);
+        });
+
+        // ── Tab key → insert spaces instead of moving focus ───────────────────
+        ['html', 'css', 'js'].forEach(id => {
+            document.getElementById(id).addEventListener('keydown', function(e) {
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const start = this.selectionStart;
+                    const end   = this.selectionEnd;
+                    this.value = this.value.substring(0, start) + '    ' + this.value.substring(end);
+                    this.selectionStart = this.selectionEnd = start + 4;
+                    saveState();
+                }
+            });
+        });
+
+        // ── Ctrl+Enter keyboard shortcut to run ───────────────────────────────
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                runCode();
+            }
+        });
+
+        // ── Console helpers ───────────────────────────────────────────────────
+        function appendToConsole(message, level) {
+            const consoleEl = document.getElementById('console');
+            const line = document.createElement('div');
+            line.className = level;
+            const prefix = level === 'error' ? '[error] ' : level === 'warn' ? '[warn]  ' : '[log]   ';
+            line.textContent = prefix + message;
+            consoleEl.appendChild(line);
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        function clearConsole() {
+            document.getElementById('console').innerHTML = '';
+        }
+
+        // ── Run code ──────────────────────────────────────────────────────────
         function runCode() {
             const htmlCode = document.getElementById('html').value;
-            const cssCode = document.getElementById('css').value;
-            const jsCode = document.getElementById('js').value;
+            const cssCode  = document.getElementById('css').value;
+            const jsCode   = document.getElementById('js').value;
 
             const iframe = document.getElementById('output');
             const iframeDocument = iframe.contentDocument || iframe.contentWindow.document;
-
-            // Redirect console logs to custom console
-            const consoleOutput = document.getElementById('console');
-            iframe.contentWindow.console.log = function(message) {
-                const msg = document.createElement('div');
-                msg.textContent = message;
-                consoleOutput.appendChild(msg);
-            };
 
             // Write the combined code to the iframe
             iframeDocument.open();
@@ -145,11 +229,24 @@
                 ${htmlCode}
                 <script>
                     (function() {
-                        const originalConsoleLog = console.log;
-                        console.log = function(message) {
-                            parent.document.getElementById('console').appendChild(document.createElement('div')).textContent = message;
-                            originalConsoleLog.apply(console, arguments);
+                        function send(level, args) {
+                            var msg = Array.prototype.slice.call(args).join(' ');
+                            parent.document.dispatchEvent(
+                                new CustomEvent('iframe-console', { detail: { level: level, message: msg } })
+                            );
+                        }
+                        var orig = { log: console.log, warn: console.warn, error: console.error };
+                        console.log   = function() { send('log',   arguments); orig.log.apply(console, arguments); };
+                        console.warn  = function() { send('warn',  arguments); orig.warn.apply(console, arguments); };
+                        console.error = function() { send('error', arguments); orig.error.apply(console, arguments); };
+
+                        window.onerror = function(msg, src, line, col) {
+                            send('error', [msg + ' (line ' + line + ')']);
+                            return true;
                         };
+                        window.addEventListener('unhandledrejection', function(e) {
+                            send('error', ['Unhandled promise rejection: ' + (e.reason && e.reason.message || e.reason)]);
+                        });
                     })();
                     ${jsCode}
                 <\/script>
@@ -157,37 +254,33 @@
             iframeDocument.close();
         }
 
-        // Function to format HTML code
+        // Receive console events from iframe via CustomEvent
+        document.addEventListener('iframe-console', function(e) {
+            appendToConsole(e.detail.message, e.detail.level);
+        });
+
+        // ── Formatters ────────────────────────────────────────────────────────
         function htmlfix() {
-            var htmlDisp = document.getElementById('html').value;
-            document.getElementById('html').value = html_beautify(htmlDisp);
+            document.getElementById('html').value = html_beautify(document.getElementById('html').value);
+            saveState();
         }
 
-        // Function to format CSS code
         function cssfix() {
-            var cssDisp = document.getElementById('css').value;
-            document.getElementById('css').value = css_beautify(cssDisp);
+            document.getElementById('css').value = css_beautify(document.getElementById('css').value);
+            saveState();
         }
 
-        // Function to format JavaScript code
         function jsfix() {
-            var jsDisp = document.getElementById('js').value;
-            document.getElementById('js').value = js_beautify(jsDisp);
+            document.getElementById('js').value = js_beautify(document.getElementById('js').value);
+            saveState();
         }
 
-        // Function to clear the console
-        function clearConsole() {
-            const consoleOutput = document.getElementById('console');
-            consoleOutput.innerHTML = '';
-        }
-
-        // Function to download the HTML file
+        // ── Download ──────────────────────────────────────────────────────────
         function downloadHTML() {
             const htmlCode = document.getElementById('html').value;
-            const cssCode = document.getElementById('css').value;
-            const jsCode = document.getElementById('js').value;
+            const cssCode  = document.getElementById('css').value;
+            const jsCode   = document.getElementById('js').value;
 
-            // Combine all code into a single HTML file
             const fullHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -206,17 +299,19 @@ ${jsCode}
 </body>
 </html>`;
 
-            // Create a blob and download the file
             const blob = new Blob([fullHTML], { type: 'text/html' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
+            const url  = URL.createObjectURL(blob);
+            const a    = document.createElement('a');
+            a.href     = url;
             a.download = 'web_app.html';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
+
+        // ── Init ──────────────────────────────────────────────────────────────
+        loadState();
     </script>
 </body>
 </html>
