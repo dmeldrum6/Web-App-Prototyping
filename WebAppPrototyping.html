@@ -1,642 +1,2908 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Include JS Beautify library for code formatting -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify-css.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify-html.js"></script>
+    <meta name="color-scheme" content="light dark">
     <title>Web App Prototyping</title>
+
+    <!-- Apply the saved/system theme before first paint (avoids a light flash in dark mode). -->
+    <script>
+        (function () {
+            var theme = null;
+            try { theme = localStorage.getItem('wap_theme'); } catch (e) {}
+            if (theme !== 'dark' && theme !== 'light') {
+                theme = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
+
+    <!--
+        CodeMirror 6 is loaded on demand from jsDelivr as plain ES modules. The import map pins every
+        package (including shared dependencies) to one exact version so only a single copy of each
+        module is ever loaded. If the CDN is unreachable the app falls back to plain text editors.
+    -->
+    <script type="importmap">
+    {
+        "imports": {
+            "@codemirror/autocomplete": "https://cdn.jsdelivr.net/npm/@codemirror/autocomplete@6.20.4/dist/index.js",
+            "@codemirror/commands": "https://cdn.jsdelivr.net/npm/@codemirror/commands@6.11.1/dist/index.js",
+            "@codemirror/lang-css": "https://cdn.jsdelivr.net/npm/@codemirror/lang-css@6.3.1/dist/index.js",
+            "@codemirror/lang-html": "https://cdn.jsdelivr.net/npm/@codemirror/lang-html@6.4.12/dist/index.js",
+            "@codemirror/lang-javascript": "https://cdn.jsdelivr.net/npm/@codemirror/lang-javascript@6.2.5/dist/index.js",
+            "@codemirror/language": "https://cdn.jsdelivr.net/npm/@codemirror/language@6.13.1/dist/index.js",
+            "@codemirror/lint": "https://cdn.jsdelivr.net/npm/@codemirror/lint@6.9.7/dist/index.js",
+            "@codemirror/search": "https://cdn.jsdelivr.net/npm/@codemirror/search@6.7.2/dist/index.js",
+            "@codemirror/state": "https://cdn.jsdelivr.net/npm/@codemirror/state@6.7.6/dist/index.js",
+            "@codemirror/streamparser": "https://cdn.jsdelivr.net/npm/@codemirror/streamparser@6.0.0/dist/index.js",
+            "@codemirror/view": "https://cdn.jsdelivr.net/npm/@codemirror/view@6.43.15/dist/index.js",
+            "@lezer/common": "https://cdn.jsdelivr.net/npm/@lezer/common@1.5.3/dist/index.js",
+            "@lezer/css": "https://cdn.jsdelivr.net/npm/@lezer/css@1.3.9/dist/index.js",
+            "@lezer/highlight": "https://cdn.jsdelivr.net/npm/@lezer/highlight@1.2.5/dist/index.js",
+            "@lezer/html": "https://cdn.jsdelivr.net/npm/@lezer/html@1.3.13/dist/index.js",
+            "@lezer/javascript": "https://cdn.jsdelivr.net/npm/@lezer/javascript@1.5.6/dist/index.js",
+            "@lezer/lr": "https://cdn.jsdelivr.net/npm/@lezer/lr@1.4.11/dist/index.js",
+            "@marijn/find-cluster-break": "https://cdn.jsdelivr.net/npm/@marijn/find-cluster-break@1.0.4/src/index.js",
+            "codemirror": "https://cdn.jsdelivr.net/npm/codemirror@6.0.2/dist/index.js",
+            "crelt": "https://cdn.jsdelivr.net/npm/crelt@1.0.7/index.js",
+            "style-mod": "https://cdn.jsdelivr.net/npm/style-mod@4.1.4/src/style-mod.js",
+            "w3c-keyname": "https://cdn.jsdelivr.net/npm/w3c-keyname@2.2.8/index.js"
+        }
+    }
+    </script>
+
     <style>
-        /* ── Theme variables ─────────────────────────────────────────────── */
+        /* ── Theme tokens ────────────────────────────────────────────────── */
         :root {
-            --bg-app:         #f0f2f5;
-            --bg-pane:        #ffffff;
-            --bg-section:     #f6f8fa;
-            --bg-textarea:    #ffffff;
-            --bg-btn:         #f0f2f5;
-            --bg-btn-hover:   #e2e5ea;
-            --bg-run:         #0969da;
-            --bg-run-hover:   #0550ae;
-            --border:         #d0d7de;
-            --text-primary:   #1f2328;
-            --text-secondary: #656d76;
-            --text-accent:    #0969da;
-            --radius:         6px;
-            --transition:     0.18s ease;
+            --bg-app:          #f0f2f5;
+            --bg-pane:         #ffffff;
+            --bg-section:      #f6f8fa;
+            --bg-editor:       #ffffff;
+            --bg-btn:          #f6f8fa;
+            --bg-btn-hover:    #eaeef2;
+            --bg-input:        #ffffff;
+            --bg-overlay:      rgba(31, 35, 40, 0.45);
+            --accent:          #0969da;
+            --accent-hover:    #0550ae;
+            --accent-soft:     rgba(9, 105, 218, 0.12);
+            --border:          #d0d7de;
+            --border-strong:   #afb8c1;
+            --text-primary:    #1f2328;
+            --text-secondary:  #656d76;
+            --danger:          #cf222e;
+            --warning:         #9a6700;
+            --success:         #1a7f37;
+            --focus-ring:      rgba(9, 105, 218, 0.45);
+            --shadow:          0 8px 24px rgba(140, 149, 159, 0.25);
+
+            /* editor */
+            --editor-gutter:   #f6f8fa;
+            --editor-gutter-fg:#8c959f;
+            --editor-active:   rgba(234, 238, 242, 0.55);
+            --editor-selection:#b6d7ff;
+            --editor-match:    rgba(255, 223, 93, 0.45);
+
+            /* syntax */
+            --syn-keyword:     #cf222e;
+            --syn-string:      #0a3069;
+            --syn-number:      #0550ae;
+            --syn-comment:     #6e7781;
+            --syn-function:    #8250df;
+            --syn-definition:  #953800;
+            --syn-property:    #0550ae;
+            --syn-type:        #953800;
+            --syn-tag:         #116329;
+            --syn-attribute:   #0550ae;
+            --syn-punct:       #57606a;
+            --syn-invalid:     #cf222e;
+
+            /* console */
+            --console-bg:      #ffffff;
+            --console-header:  #f6f8fa;
+            --console-line:    #eaeef2;
+            --console-warn-bg: #fff8c5;
+            --console-err-bg:  #ffebe9;
+            --console-warn-fg: #7d4e00;
+            --console-err-fg:  #a40e26;
+
+            --stage-bg:        #e9ecef;
+
+            --radius:          6px;
+            --transition:      0.18s ease;
+            --font-ui:         -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            --font-mono:       ui-monospace, 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, 'Courier New', monospace;
         }
 
         [data-theme="dark"] {
-            --bg-app:         #0d1117;
-            --bg-pane:        #161b22;
-            --bg-section:     #1c2128;
-            --bg-textarea:    #0d1117;
-            --bg-btn:         #21262d;
-            --bg-btn-hover:   #30363d;
-            --bg-run:         #1f6feb;
-            --bg-run-hover:   #388bfd;
-            --border:         #30363d;
-            --text-primary:   #e6edf3;
-            --text-secondary: #8b949e;
-            --text-accent:    #58a6ff;
+            --bg-app:          #0d1117;
+            --bg-pane:         #161b22;
+            --bg-section:      #1c2128;
+            --bg-editor:       #0d1117;
+            --bg-btn:          #21262d;
+            --bg-btn-hover:    #30363d;
+            --bg-input:        #0d1117;
+            --bg-overlay:      rgba(1, 4, 9, 0.65);
+            --accent:          #1f6feb;
+            --accent-hover:    #388bfd;
+            --accent-soft:     rgba(56, 139, 253, 0.18);
+            --border:          #30363d;
+            --border-strong:   #484f58;
+            --text-primary:    #e6edf3;
+            --text-secondary:  #8b949e;
+            --danger:          #f85149;
+            --warning:         #d29922;
+            --success:         #3fb950;
+            --focus-ring:      rgba(56, 139, 253, 0.55);
+            --shadow:          0 8px 24px rgba(1, 4, 9, 0.6);
+
+            --editor-gutter:   #0d1117;
+            --editor-gutter-fg:#6e7681;
+            --editor-active:   rgba(110, 118, 129, 0.12);
+            --editor-selection:#264f78;
+            --editor-match:    rgba(187, 128, 9, 0.4);
+
+            --syn-keyword:     #ff7b72;
+            --syn-string:      #a5d6ff;
+            --syn-number:      #79c0ff;
+            --syn-comment:     #8b949e;
+            --syn-function:    #d2a8ff;
+            --syn-definition:  #ffa657;
+            --syn-property:    #79c0ff;
+            --syn-type:        #ffa657;
+            --syn-tag:         #7ee787;
+            --syn-attribute:   #79c0ff;
+            --syn-punct:       #8b949e;
+            --syn-invalid:     #f85149;
+
+            --console-bg:      #0d1117;
+            --console-header:  #161b22;
+            --console-line:    #21262d;
+            --console-warn-bg: rgba(187, 128, 9, 0.15);
+            --console-err-bg:  rgba(248, 81, 73, 0.12);
+            --console-warn-fg: #e3b341;
+            --console-err-fg:  #ff7b72;
+
+            --stage-bg:        #010409;
         }
 
-        /* ── Reset / Base ────────────────────────────────────────────────── */
+        /* ── Base ────────────────────────────────────────────────────────── */
         *, *::before, *::after { box-sizing: border-box; }
+
+        html, body { height: 100%; }
 
         body {
             display: flex;
             flex-direction: column;
             margin: 0;
-            height: 100vh;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            overflow: hidden;
+            font-family: var(--font-ui);
             font-size: 14px;
             background: var(--bg-app);
             color: var(--text-primary);
+        }
+
+        button, input, select, textarea { font: inherit; color: inherit; }
+
+        :focus-visible {
+            outline: 2px solid var(--focus-ring);
+            outline-offset: 1px;
+        }
+
+        svg.icon {
+            width: 15px;
+            height: 15px;
+            flex-shrink: 0;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .visually-hidden {
+            position: absolute !important;
+            width: 1px; height: 1px;
+            overflow: hidden;
+            clip: rect(0 0 0 0);
+            white-space: nowrap;
+        }
+
+        /* ── Buttons ─────────────────────────────────────────────────────── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            height: 30px;
+            padding: 0 11px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            background: var(--bg-btn);
+            color: var(--text-primary);
+            font-size: 13px;
+            font-weight: 500;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: background var(--transition), border-color var(--transition), color var(--transition);
+        }
+        .btn:hover { background: var(--bg-btn-hover); }
+        .btn:disabled { opacity: 0.6; cursor: default; }
+
+        .btn-primary {
+            background: var(--accent);
+            border-color: transparent;
+            color: #ffffff;
+            font-weight: 600;
+        }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-primary:active { transform: scale(0.98); }
+
+        .btn-icon { width: 30px; padding: 0; }
+
+        .btn-danger:hover { color: var(--danger); border-color: var(--danger); }
+
+        .btn-mini {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            height: 22px;
+            padding: 0 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            background: var(--bg-btn);
+            color: var(--text-secondary);
+            font-size: 11px;
+            cursor: pointer;
             transition: background var(--transition), color var(--transition);
         }
+        .btn-mini:hover { background: var(--bg-btn-hover); color: var(--text-primary); }
+        .btn-mini svg.icon { width: 12px; height: 12px; }
+        .btn-mini[aria-pressed="true"] {
+            background: var(--accent-soft);
+            border-color: var(--accent);
+            color: var(--text-primary);
+        }
+
+        .check {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+        .check input { margin: 0; accent-color: var(--accent); cursor: pointer; }
+
+        /* toggle switch */
+        .switch {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            cursor: pointer;
+            user-select: none;
+        }
+        .switch input {
+            appearance: none;
+            position: relative;
+            width: 28px;
+            height: 16px;
+            margin: 0;
+            border-radius: 999px;
+            background: var(--border-strong);
+            cursor: pointer;
+            transition: background var(--transition);
+        }
+        .switch input::after {
+            content: '';
+            position: absolute;
+            top: 2px; left: 2px;
+            width: 12px; height: 12px;
+            border-radius: 50%;
+            background: #ffffff;
+            transition: transform var(--transition);
+        }
+        .switch input:checked { background: var(--accent); }
+        .switch input:checked::after { transform: translateX(12px); }
 
         /* ── App Header ──────────────────────────────────────────────────── */
         .app-header {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            padding: 0 16px;
-            height: 48px;
+            gap: 12px;
+            padding: 0 12px;
+            height: 50px;
             background: var(--bg-pane);
             border-bottom: 1px solid var(--border);
             flex-shrink: 0;
-            transition: background var(--transition), border-color var(--transition);
         }
 
-        .app-title {
-            font-size: 15px;
-            font-weight: 700;
-            color: var(--text-primary);
-            letter-spacing: -0.02em;
-        }
-
-        .app-title span {
-            color: var(--text-accent);
-        }
-
-        .header-right {
+        .brand {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 8px;
+            flex-shrink: 0;
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            white-space: nowrap;
         }
+        .brand svg { width: 20px; height: 20px; color: var(--accent); }
+        .brand .accent { color: var(--accent); }
 
-        .shortcut-hint {
-            font-size: 11px;
-            color: var(--text-secondary);
+        .project-name {
+            min-width: 80px;
+            width: 220px;
+            height: 30px;
+            padding: 0 8px;
+            border: 1px solid transparent;
+            border-radius: var(--radius);
+            background: transparent;
+            font-size: 14px;
+            font-weight: 500;
+            text-overflow: ellipsis;
         }
+        .project-name:hover { border-color: var(--border); }
+        .project-name:focus { border-color: var(--accent); background: var(--bg-input); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
 
-        .theme-toggle {
+        .header-actions {
             display: flex;
             align-items: center;
             gap: 6px;
-            padding: 5px 12px;
-            border-radius: 20px;
-            border: 1px solid var(--border);
-            background: var(--bg-btn);
-            color: var(--text-primary);
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: 500;
-            transition: background var(--transition), border-color var(--transition), color var(--transition);
+            margin-left: auto;
         }
 
-        .theme-toggle:hover {
-            background: var(--bg-btn-hover);
+        .header-actions .sep {
+            width: 1px;
+            height: 20px;
+            margin: 0 4px;
+            background: var(--border);
         }
 
-        .theme-toggle svg {
-            width: 13px;
-            height: 13px;
+        @media (max-width: 1180px) {
+            .header-actions .btn:not(.btn-primary) .label { display: none; }
+            .header-actions .btn:not(.btn-primary) { width: 30px; padding: 0; }
+        }
+
+        /* ── Mobile tabs (hidden on desktop) ─────────────────────────────── */
+        .mobile-tabs {
+            display: none;
+            background: var(--bg-pane);
+            border-bottom: 1px solid var(--border);
             flex-shrink: 0;
         }
+        .mobile-tabs button {
+            flex: 1;
+            padding: 10px 0;
+            border: none;
+            border-bottom: 2px solid transparent;
+            background: none;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .mobile-tabs button[aria-selected="true"] {
+            color: var(--text-primary);
+            border-bottom-color: var(--accent);
+        }
 
-        /* ── Main Split ──────────────────────────────────────────────────── */
+        /* ── Main layout ─────────────────────────────────────────────────── */
         .app-main {
             display: flex;
             flex: 1;
             min-height: 0;
             overflow: hidden;
         }
+        body.layout-rows .app-main { flex-direction: column; }
 
-        /* ── Editor Pane ─────────────────────────────────────────────────── */
         .editor-pane {
-            width: 50%;
+            flex: 0 0 var(--split, 50%);
             display: flex;
             flex-direction: column;
-            background: var(--bg-pane);
-            border-right: 1px solid var(--border);
-            overflow: hidden;
-            transition: background var(--transition), border-color var(--transition);
-        }
-
-        .editor-sections {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            padding: 10px 10px 0;
-            gap: 8px;
+            min-width: 0;
             min-height: 0;
+            padding: 8px;
+            background: var(--bg-pane);
             overflow: hidden;
         }
+        body.layout-rows .editor-pane { flex-direction: row; }
 
-        .editor-section {
-            flex: 1;
+        .output-pane {
+            flex: 1 1 0;
             display: flex;
             flex-direction: column;
+            min-width: 0;
+            min-height: 0;
+            background: var(--bg-pane);
+        }
+
+        /* gutters / resize handles */
+        .gutter {
+            position: relative;
+            flex: 0 0 auto;
+            background: transparent;
+            touch-action: none;
+        }
+        .gutter::after {
+            content: '';
+            position: absolute;
+            border-radius: 2px;
+            background: transparent;
+            transition: background var(--transition);
+        }
+        .gutter:hover::after, .gutter:focus-visible::after, .gutter.active::after { background: var(--accent); }
+        .gutter:focus-visible { outline: none; }
+
+        .gutter-main {
+            width: 6px;
+            cursor: col-resize;
+            background: var(--bg-app);
+            border-left: 1px solid var(--border);
+            border-right: 1px solid var(--border);
+        }
+        .gutter-main::after { inset: 0 1px; }
+        body.layout-rows .gutter-main {
+            width: auto;
+            height: 6px;
+            cursor: row-resize;
+            border: none;
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+        body.layout-rows .gutter-main::after { inset: 1px 0; }
+
+        .gutter-section { height: 8px; cursor: row-resize; }
+        .gutter-section::after { left: 30%; right: 30%; top: 3px; height: 2px; }
+        body.layout-rows .gutter-section { height: auto; width: 8px; cursor: col-resize; }
+        body.layout-rows .gutter-section::after { top: 30%; bottom: 30%; left: 3px; width: 2px; height: auto; right: auto; }
+        .gutter-section.disabled { cursor: default; pointer-events: none; }
+
+        .gutter-console {
+            height: 5px;
+            margin-top: -2px;
+            margin-bottom: -3px;
+            z-index: 2;
+            cursor: row-resize;
+        }
+        .gutter-console::after { left: 0; right: 0; top: 2px; height: 2px; }
+
+        body.is-resizing { user-select: none; }
+        body.is-resizing iframe { pointer-events: none; }
+        body.is-resizing.resize-col, body.is-resizing.resize-col * { cursor: col-resize !important; }
+        body.is-resizing.resize-row, body.is-resizing.resize-row * { cursor: row-resize !important; }
+
+        /* ── Editor sections ─────────────────────────────────────────────── */
+        .editor-section {
+            flex: var(--grow, 1) 1 0;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
             min-height: 0;
             border: 1px solid var(--border);
             border-radius: var(--radius);
             overflow: hidden;
-            transition: border-color var(--transition);
+            background: var(--bg-editor);
         }
+        .editor-section.collapsed { flex: 0 0 auto; }
+        .editor-section.collapsed .editor-host { display: none; }
+        .editor-section.collapsed .section-header { border-bottom: none; }
+        .editor-section:focus-within { border-color: var(--border-strong); }
+
+        body.layout-rows .editor-section.collapsed .section-header {
+            flex-direction: column;
+            height: 100%;
+            padding: 8px 4px;
+        }
+        body.layout-rows .editor-section.collapsed .section-label { writing-mode: vertical-rl; }
+        body.layout-rows .editor-section.collapsed .section-toggle { flex-direction: column; }
+        .editor-section.collapsed .format-btn { display: none; }
 
         .section-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 5px 8px;
+            gap: 8px;
+            min-height: 30px;
+            padding: 3px 6px 3px 4px;
             background: var(--bg-section);
             border-bottom: 1px solid var(--border);
             flex-shrink: 0;
-            transition: background var(--transition), border-color var(--transition);
         }
 
-        .section-label {
-            font-size: 10px;
+        .section-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 4px;
+            border: none;
+            border-radius: 4px;
+            background: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+        .section-toggle:hover { color: var(--text-primary); }
+        .section-toggle svg.icon { width: 12px; height: 12px; transition: transform var(--transition); }
+        .section-toggle[aria-expanded="false"] svg.icon { transform: rotate(-90deg); }
+
+        .section-label, .pane-label {
+            font-size: 10.5px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.08em;
             color: var(--text-secondary);
         }
-
-        .format-btn {
-            padding: 2px 8px;
-            border-radius: 4px;
-            border: 1px solid var(--border);
-            background: var(--bg-btn);
-            color: var(--text-secondary);
-            cursor: pointer;
-            font-size: 11px;
-            transition: background var(--transition), color var(--transition), border-color var(--transition);
+        .section-label .dot {
+            display: inline-block;
+            width: 7px; height: 7px;
+            margin-right: 6px;
+            border-radius: 50%;
+            vertical-align: 1px;
         }
+        [data-lang="html"] .dot { background: #e34c26; }
+        [data-lang="css"]  .dot { background: #563d7c; }
+        [data-lang="js"]   .dot { background: #f1e05a; }
+        [data-theme="dark"] [data-lang="css"] .dot { background: #8b6fd6; }
 
-        .format-btn:hover {
-            background: var(--bg-btn-hover);
-            color: var(--text-primary);
-        }
-
-        .editor-section textarea {
+        .editor-host {
+            position: relative;
             flex: 1;
-            width: 100%;
-            padding: 10px;
-            border: none;
-            outline: none;
-            font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, 'Courier New', monospace;
-            font-size: 13px;
-            line-height: 1.6;
-            resize: none;
-            background: var(--bg-textarea);
-            color: var(--text-primary);
-            transition: background var(--transition), color var(--transition);
-        }
-
-        .editor-section textarea::placeholder {
-            color: var(--text-secondary);
-            opacity: 0.5;
-        }
-
-        /* ── Action Bar ──────────────────────────────────────────────────── */
-        .action-bar {
-            display: flex;
-            gap: 8px;
-            padding: 10px;
-            background: var(--bg-pane);
-            border-top: 1px solid var(--border);
-            flex-shrink: 0;
-            transition: background var(--transition), border-color var(--transition);
-        }
-
-        .run-btn {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 7px;
-            padding: 9px 16px;
-            border-radius: var(--radius);
-            border: none;
-            background: var(--bg-run);
-            color: #ffffff;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background var(--transition), transform 0.1s;
-        }
-
-        .run-btn:hover { background: var(--bg-run-hover); }
-        .run-btn:active { transform: scale(0.98); }
-
-        .run-btn svg { flex-shrink: 0; }
-
-        .download-btn {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 7px;
-            padding: 9px 16px;
-            border-radius: var(--radius);
-            border: 1px solid var(--border);
-            background: var(--bg-btn);
-            color: var(--text-primary);
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background var(--transition), border-color var(--transition), color var(--transition);
-        }
-
-        .download-btn:hover { background: var(--bg-btn-hover); }
-        .download-btn svg { flex-shrink: 0; }
-
-        /* ── Output Pane ─────────────────────────────────────────────────── */
-        .output-pane {
-            width: 50%;
-            display: flex;
-            flex-direction: column;
+            min-height: 0;
             overflow: hidden;
         }
 
-        .output-header {
+        .editor-host textarea {
+            display: block;
+            width: 100%;
+            height: 100%;
+            padding: 8px 10px;
+            border: none;
+            outline: none;
+            resize: none;
+            background: var(--bg-editor);
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+            font-size: 13px;
+            line-height: 1.6;
+            tab-size: 2;
+        }
+        .editor-host textarea::placeholder { color: var(--text-secondary); opacity: 0.6; }
+        .editor-host .cm-editor { height: 100%; }
+
+        /* ── Output / preview ────────────────────────────────────────────── */
+        .pane-toolbar {
             display: flex;
             align-items: center;
-            padding: 6px 12px;
+            gap: 8px;
+            min-height: 38px;
+            padding: 4px 8px 4px 12px;
             background: var(--bg-pane);
             border-bottom: 1px solid var(--border);
             flex-shrink: 0;
-            transition: background var(--transition), border-color var(--transition);
         }
+        .pane-toolbar .spacer { flex: 1; }
+        .pane-toolbar .btn { height: 26px; }
+        .pane-toolbar .btn-icon { width: 26px; }
 
-        .output-label {
-            font-size: 10px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
+        .size-badge {
+            font-family: var(--font-mono);
+            font-size: 11px;
             color: var(--text-secondary);
         }
 
-        iframe {
-            width: 100%;
-            flex: 1;
-            border: none;
-            background: #ffffff;
-            min-height: 0;
+        .select {
+            height: 26px;
+            padding: 0 6px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--bg-btn);
+            font-size: 12px;
+            cursor: pointer;
         }
 
-        /* ── Console (always dark) ───────────────────────────────────────── */
+        .stage {
+            position: relative;
+            flex: 1;
+            display: flex;
+            min-height: 0;
+            overflow: auto;
+            background: #ffffff;
+        }
+        .stage iframe {
+            flex: 1 1 auto;
+            width: 100%;
+            min-height: 100%;
+            border: none;
+            background: #ffffff;
+        }
+        .stage.fixed {
+            justify-content: center;
+            padding: 16px;
+            background: var(--stage-bg);
+        }
+        .stage.fixed iframe {
+            flex: 0 0 var(--device-w);
+            width: var(--device-w);
+            min-height: 0;
+            height: 100%;
+            border-radius: 4px;
+            box-shadow: 0 0 0 1px var(--border), var(--shadow);
+        }
+        .stage-empty {
+            margin: auto;
+            color: #8c959f;
+            font-size: 13px;
+            text-align: center;
+        }
+
+        /* ── Console ─────────────────────────────────────────────────────── */
+        .console-panel {
+            flex: 0 0 var(--console-h, 180px);
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            border-top: 1px solid var(--border);
+            background: var(--console-bg);
+        }
+        .console-panel.collapsed { flex: 0 0 auto; }
+        .console-panel.collapsed .console-body { display: none; }
+        .console-panel.collapsed + .gutter-console,
+        .gutter-console.disabled { display: none; }
+
         .console-header {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            padding: 5px 12px;
-            background: #1e2228;
-            border-top: 1px solid #333b45;
+            gap: 8px;
+            flex-wrap: wrap;
+            min-height: 32px;
+            padding: 3px 8px 3px 4px;
+            background: var(--console-header);
+            border-bottom: 1px solid var(--border);
             flex-shrink: 0;
         }
+        .console-panel.collapsed .console-header { border-bottom: none; }
+        .console-header .spacer { flex: 1; }
 
-        .console-title {
+        .count-badge {
+            display: none;
+            min-width: 18px;
+            padding: 0 5px;
+            border-radius: 999px;
             font-size: 10px;
             font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: #606978;
+            line-height: 16px;
+            text-align: center;
+            letter-spacing: 0;
+            text-transform: none;
+        }
+        .count-badge.show { display: inline-block; }
+        .count-badge.error { background: var(--console-err-bg); color: var(--console-err-fg); }
+        .count-badge.warn  { background: var(--console-warn-bg); color: var(--console-warn-fg); }
+
+        .console-filters { display: inline-flex; gap: 4px; }
+
+        .console-body {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
         }
 
-        .clear-btn {
-            padding: 2px 8px;
-            border-radius: 4px;
-            border: 1px solid #3a414a;
-            background: #252b33;
-            color: #8b949e;
-            cursor: pointer;
-            font-size: 11px;
-            transition: background 0.15s, color 0.15s;
-        }
-
-        .clear-btn:hover {
-            background: #333b45;
-            color: #e6edf3;
-        }
-
-        .console {
-            height: 140px;
-            padding: 8px 12px;
-            background: #0d1117;
-            font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace;
-            font-size: 12px;
-            line-height: 1.55;
+        .console-entries {
+            flex: 1;
+            min-height: 0;
             overflow-y: auto;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .entry {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 3px 10px 3px 12px;
+            border-bottom: 1px solid var(--console-line);
+            color: var(--text-primary);
+        }
+        .entry-msg { flex: 1; min-width: 0; white-space: pre-wrap; word-break: break-word; }
+        .entry-icon { flex-shrink: 0; width: 12px; color: var(--text-secondary); text-align: center; user-select: none; }
+        .entry-warn  { background: var(--console-warn-bg); color: var(--console-warn-fg); }
+        .entry-error { background: var(--console-err-bg); color: var(--console-err-fg); }
+        .entry-info .entry-icon { color: var(--accent); }
+        .entry-debug { color: var(--text-secondary); }
+        .entry-input .entry-icon, .entry-result .entry-icon { color: var(--accent); }
+        .entry-input { color: var(--text-secondary); }
+        .entry-system { color: var(--text-secondary); font-style: italic; }
+
+        .entry-loc {
+            flex-shrink: 0;
+            padding: 0;
+            border: none;
+            background: none;
+            color: var(--text-secondary);
+            font: inherit;
+            font-size: 11px;
+            text-decoration: underline dotted;
+            cursor: pointer;
+        }
+        .entry-loc:hover { color: var(--accent); }
+
+        .entry-repeat {
+            flex-shrink: 0;
+            min-width: 18px;
+            padding: 0 5px;
+            border-radius: 999px;
+            background: var(--bg-btn-hover);
+            color: var(--text-secondary);
+            font-size: 10px;
+            line-height: 16px;
+            text-align: center;
+        }
+
+        .entry-stack {
+            margin: 2px 0 0;
+            color: inherit;
+            opacity: 0.85;
+            font-size: 11px;
+        }
+        .entry-stack summary { cursor: pointer; }
+        .entry-stack pre { margin: 2px 0 0 12px; white-space: pre-wrap; }
+
+        .entry-group { border-bottom: 1px solid var(--console-line); }
+        .entry-group > summary {
+            padding: 3px 10px 3px 12px;
+            cursor: pointer;
+            font-weight: 600;
+            list-style-position: inside;
+        }
+        .entry-group > .group-body { margin-left: 14px; border-left: 1px solid var(--console-line); }
+
+        .console-entries[data-filter="error"] .entry:not(.entry-error),
+        .console-entries[data-filter="warn"]  .entry:not(.entry-warn),
+        .console-entries[data-filter="log"]   .entry.entry-error,
+        .console-entries[data-filter="log"]   .entry.entry-warn { display: none; }
+
+        /* rendered values */
+        .v-str      { color: var(--syn-string); }
+        .v-num      { color: var(--syn-number); }
+        .v-bool     { color: var(--syn-keyword); }
+        .v-null     { color: var(--text-secondary); }
+        .v-fn       { color: var(--syn-function); font-style: italic; }
+        .v-sym, .v-re, .v-date { color: var(--syn-definition); }
+        .v-node     { color: var(--syn-tag); }
+        .v-key      { color: var(--syn-property); }
+        .v-meta     { color: var(--text-secondary); font-style: italic; }
+        .v-err      { color: var(--console-err-fg); }
+        .entry-warn .v-str-top, .entry-error .v-str-top { color: inherit; }
+
+        .v-tree { display: inline-block; vertical-align: top; }
+        .v-tree > summary { cursor: pointer; list-style: none; }
+        .v-tree > summary::before {
+            content: '▸';
+            display: inline-block;
+            width: 1em;
+            color: var(--text-secondary);
+            transition: transform 0.1s;
+        }
+        .v-tree[open] > summary::before { transform: rotate(90deg); }
+        .v-tree > summary::-webkit-details-marker { display: none; }
+        .v-children { padding-left: 1.2em; }
+        .v-row { white-space: pre-wrap; }
+
+        .v-table {
+            margin: 2px 0;
+            border-collapse: collapse;
+            font-size: 11.5px;
+        }
+        .v-table th, .v-table td {
+            padding: 2px 8px;
+            border: 1px solid var(--border);
+            text-align: left;
+            white-space: nowrap;
+        }
+        .v-table th { background: var(--bg-section); font-weight: 600; }
+
+        .console-input {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 0 10px 0 12px;
+            border-top: 1px solid var(--console-line);
             flex-shrink: 0;
         }
+        .console-input .prompt { color: var(--accent); font-family: var(--font-mono); font-weight: 700; }
+        .console-input input {
+            flex: 1;
+            height: 28px;
+            padding: 0;
+            border: none;
+            outline: none;
+            background: transparent;
+            font-family: var(--font-mono);
+            font-size: 12px;
+        }
 
-        .console .log   { color: #3fb950; }
-        .console .warn  { color: #d29922; }
-        .console .error { color: #f85149; }
+        /* ── Dialogs ─────────────────────────────────────────────────────── */
+        dialog {
+            width: min(560px, calc(100vw - 32px));
+            max-height: calc(100vh - 64px);
+            padding: 0;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--bg-pane);
+            color: var(--text-primary);
+            box-shadow: var(--shadow);
+        }
+        dialog::backdrop { background: var(--bg-overlay); }
 
-        .console::-webkit-scrollbar { width: 6px; }
-        .console::-webkit-scrollbar-track { background: #0d1117; }
-        .console::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+        .dialog-inner {
+            display: flex;
+            flex-direction: column;
+            max-height: calc(100vh - 66px);
+        }
+        .dialog-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 12px 12px 18px;
+            border-bottom: 1px solid var(--border);
+        }
+        .dialog-header h2 { margin: 0; font-size: 15px; }
+        .dialog-body {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 16px 18px;
+            overflow-y: auto;
+        }
+        .dialog-body label.field-label { margin-top: 10px; font-weight: 600; font-size: 13px; }
+        .dialog-body label.field-label:first-child { margin-top: 0; }
+        .dialog-body .hint { margin: 0; font-size: 12px; color: var(--text-secondary); }
+        .dialog-body textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--bg-input);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            line-height: 1.5;
+            resize: vertical;
+        }
+        .dialog-body textarea:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+        .dialog-body .check { margin-top: 8px; font-size: 13px; color: var(--text-primary); }
+        .dialog-body code { font-family: var(--font-mono); font-size: 0.92em; }
+        .dialog-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            padding: 12px 18px;
+            border-top: 1px solid var(--border);
+        }
+        .dialog-toolbar { display: flex; gap: 8px; padding: 12px 18px 4px; }
+
+        .shortcuts {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 4px 14px;
+            margin: 4px 0 0;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .shortcuts dt { white-space: nowrap; }
+        kbd {
+            padding: 1px 5px;
+            border: 1px solid var(--border);
+            border-bottom-width: 2px;
+            border-radius: 4px;
+            background: var(--bg-section);
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-primary);
+        }
+
+        .project-list {
+            margin: 0;
+            padding: 8px 10px 14px;
+            list-style: none;
+            overflow-y: auto;
+        }
+        .project-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 2px 0;
+        }
+        .project-open {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 1px;
+            min-width: 0;
+            padding: 7px 10px;
+            border: 1px solid transparent;
+            border-radius: var(--radius);
+            background: none;
+            text-align: left;
+            cursor: pointer;
+        }
+        .project-open:hover { background: var(--bg-btn-hover); }
+        .project-item.current .project-open { border-color: var(--accent); background: var(--accent-soft); }
+        .project-title { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+        .project-meta { font-size: 12px; color: var(--text-secondary); }
+
+        /* ── Toasts ──────────────────────────────────────────────────────── */
+        .toasts {
+            position: fixed;
+            right: 16px;
+            bottom: 16px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 8px;
+            pointer-events: none;
+        }
+        .toast {
+            max-width: min(420px, calc(100vw - 32px));
+            padding: 10px 14px;
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--accent);
+            border-radius: var(--radius);
+            background: var(--bg-pane);
+            color: var(--text-primary);
+            box-shadow: var(--shadow);
+            font-size: 13px;
+            opacity: 0;
+            transform: translateY(8px);
+            transition: opacity 0.2s, transform 0.2s;
+            pointer-events: auto;
+        }
+        .toast.show { opacity: 1; transform: none; }
+        .toast-success { border-left-color: var(--success); }
+        .toast-warn    { border-left-color: var(--warning); }
+        .toast-error   { border-left-color: var(--danger); }
+
+        /* ── Narrow screens: tabbed layout ───────────────────────────────── */
+        @media (max-width: 760px) {
+            .app-header { gap: 6px; padding: 0 8px; }
+            .brand .brand-text { display: none; }
+            .project-name { flex: 1; width: auto; }
+            .header-actions { gap: 4px; }
+            .header-actions .sep, #autorun-wrap .label { display: none; }
+            .header-actions .btn .label { display: none; }
+            .header-actions .btn { width: 30px; padding: 0; }
+            #download-btn, #layout-btn { display: none; }
+
+            .mobile-tabs { display: flex; }
+            .app-main, body.layout-rows .app-main { flex-direction: column; }
+            .gutter { display: none !important; }
+
+            .editor-pane, body.layout-rows .editor-pane { flex: 1 1 auto; flex-direction: column; padding: 0; }
+            body[data-mtab="preview"] .editor-pane { display: none; }
+            body:not([data-mtab="preview"]) .output-pane { display: none; }
+
+            .editor-section { display: none; border: none; border-radius: 0; }
+            body[data-mtab="html"] .editor-section[data-lang="html"],
+            body[data-mtab="css"]  .editor-section[data-lang="css"],
+            body[data-mtab="js"]   .editor-section[data-lang="js"] { display: flex; flex: 1 1 auto; }
+            .editor-section.collapsed .editor-host { display: block; }
+            .editor-section.collapsed .format-btn { display: inline-flex; }
+            .section-toggle { pointer-events: none; }
+            .section-toggle svg.icon { display: none; }
+
+            .console-panel { flex-basis: 38%; }
+            .console-filters { display: none; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { transition: none !important; }
+        }
     </style>
 </head>
-<body>
+<body class="layout-columns" data-mtab="html">
+
+    <!-- Icon sprite -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+        <symbol id="i-logo" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><line x1="14" y1="4" x2="10" y2="20"/></symbol>
+        <symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3" fill="currentColor" stroke="none"/></symbol>
+        <symbol id="i-refresh" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></symbol>
+        <symbol id="i-external" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></symbol>
+        <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
+        <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></symbol>
+        <symbol id="i-folder" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></symbol>
+        <symbol id="i-sliders" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></symbol>
+        <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+        <symbol id="i-columns" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></symbol>
+        <symbol id="i-rows" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="12" x2="21" y2="12"/></symbol>
+        <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></symbol>
+        <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></symbol>
+        <symbol id="i-trash" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+        <symbol id="i-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></symbol>
+        <symbol id="i-x" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+        <symbol id="i-wand" viewBox="0 0 24 24"><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8L19 13"/><path d="M15 9h0"/><path d="M17.8 6.2L19 5"/><path d="M3 21l9-9"/><path d="M12.2 6.2L11 5"/></symbol>
+        <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></symbol>
+    </svg>
 
     <!-- App Header -->
     <header class="app-header">
-        <div class="app-title">Web App <span>Prototyping</span></div>
-        <div class="header-right">
-            <span class="shortcut-hint">Ctrl+Enter to run</span>
-            <button class="theme-toggle" onclick="toggleTheme()" id="theme-toggle-btn">
-                <!-- Icon swapped by JS; default = moon (switch to dark) -->
-                <svg id="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-                </svg>
-                <span id="theme-label">Dark</span>
+        <div class="brand">
+            <svg class="icon" aria-hidden="true"><use href="#i-logo"/></svg>
+            <span class="brand-text">Web App <span class="accent">Prototyping</span></span>
+        </div>
+        <input id="project-name" class="project-name" type="text" aria-label="Project name" spellcheck="false" autocomplete="off">
+
+        <div class="header-actions">
+            <button id="run-btn" class="btn btn-primary" type="button" title="Run (Ctrl/⌘ + Enter)">
+                <svg class="icon" aria-hidden="true"><use href="#i-play"/></svg><span class="label">Run</span>
+            </button>
+            <label class="switch" id="autorun-wrap" title="Re-run automatically as you type">
+                <input type="checkbox" id="autorun" role="switch"><span class="label">Auto-run</span>
+            </label>
+            <span class="sep"></span>
+            <button id="projects-btn" class="btn" type="button" title="Projects">
+                <svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg><span class="label">Projects</span>
+            </button>
+            <button id="settings-btn" class="btn" type="button" title="Resources &amp; settings">
+                <svg class="icon" aria-hidden="true"><use href="#i-sliders"/></svg><span class="label">Settings</span>
+            </button>
+            <button id="share-btn" class="btn" type="button" title="Copy a share link">
+                <svg class="icon" aria-hidden="true"><use href="#i-link"/></svg><span class="label">Share</span>
+            </button>
+            <button id="download-btn" class="btn" type="button" title="Download as a single HTML file">
+                <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span class="label">Download</span>
+            </button>
+            <span class="sep"></span>
+            <button id="layout-btn" class="btn btn-icon" type="button">
+                <svg class="icon" aria-hidden="true"><use href="#i-rows"/></svg>
+            </button>
+            <button id="theme-btn" class="btn btn-icon" type="button">
+                <svg class="icon" aria-hidden="true"><use href="#i-moon"/></svg>
             </button>
         </div>
     </header>
 
-    <!-- Main Split Layout -->
-    <main class="app-main">
+    <!-- Tab bar for narrow screens -->
+    <nav class="mobile-tabs" role="tablist" aria-label="Panels">
+        <button type="button" role="tab" data-tab="html" aria-selected="true">HTML</button>
+        <button type="button" role="tab" data-tab="css" aria-selected="false">CSS</button>
+        <button type="button" role="tab" data-tab="js" aria-selected="false">JS</button>
+        <button type="button" role="tab" data-tab="preview" aria-selected="false">Preview</button>
+    </nav>
 
-        <!-- Editor Pane -->
-        <div class="editor-pane">
-            <div class="editor-sections">
+    <main class="app-main" id="app-main">
 
-                <div class="editor-section">
-                    <div class="section-header">
-                        <span class="section-label">HTML</span>
-                        <button class="format-btn" onclick="htmlfix()">Format</button>
-                    </div>
-                    <textarea id="html" placeholder="<!-- HTML -->" spellcheck="false"></textarea>
+        <!-- Editors -->
+        <section class="editor-pane" id="editor-pane" aria-label="Code editors">
+            <div class="editor-section" data-lang="html">
+                <div class="section-header">
+                    <button class="section-toggle" type="button" aria-expanded="true" title="Collapse / expand">
+                        <svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg>
+                        <span class="section-label"><span class="dot"></span>HTML</span>
+                    </button>
+                    <button class="btn-mini format-btn" type="button" data-lang="html" title="Format with Prettier (Shift+Alt+F)">
+                        <svg class="icon" aria-hidden="true"><use href="#i-wand"/></svg>Format
+                    </button>
                 </div>
-
-                <div class="editor-section">
-                    <div class="section-header">
-                        <span class="section-label">CSS</span>
-                        <button class="format-btn" onclick="cssfix()">Format</button>
-                    </div>
-                    <textarea id="css" placeholder="/* CSS */" spellcheck="false"></textarea>
+                <div class="editor-host">
+                    <textarea id="html" aria-label="HTML editor" placeholder="<!-- HTML -->" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
                 </div>
-
-                <div class="editor-section">
-                    <div class="section-header">
-                        <span class="section-label">JavaScript</span>
-                        <button class="format-btn" onclick="jsfix()">Format</button>
-                    </div>
-                    <textarea id="js" placeholder="// JavaScript" spellcheck="false"></textarea>
-                </div>
-
             </div>
+            <div class="gutter gutter-section" data-index="0" role="separator" tabindex="0" aria-label="Resize HTML and CSS editors"></div>
+            <div class="editor-section" data-lang="css">
+                <div class="section-header">
+                    <button class="section-toggle" type="button" aria-expanded="true" title="Collapse / expand">
+                        <svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg>
+                        <span class="section-label"><span class="dot"></span>CSS</span>
+                    </button>
+                    <button class="btn-mini format-btn" type="button" data-lang="css" title="Format with Prettier (Shift+Alt+F)">
+                        <svg class="icon" aria-hidden="true"><use href="#i-wand"/></svg>Format
+                    </button>
+                </div>
+                <div class="editor-host">
+                    <textarea id="css" aria-label="CSS editor" placeholder="/* CSS */" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+                </div>
+            </div>
+            <div class="gutter gutter-section" data-index="1" role="separator" tabindex="0" aria-label="Resize CSS and JavaScript editors"></div>
+            <div class="editor-section" data-lang="js">
+                <div class="section-header">
+                    <button class="section-toggle" type="button" aria-expanded="true" title="Collapse / expand">
+                        <svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg>
+                        <span class="section-label"><span class="dot"></span>JavaScript</span>
+                    </button>
+                    <button class="btn-mini format-btn" type="button" data-lang="js" title="Format with Prettier (Shift+Alt+F)">
+                        <svg class="icon" aria-hidden="true"><use href="#i-wand"/></svg>Format
+                    </button>
+                </div>
+                <div class="editor-host">
+                    <textarea id="js" aria-label="JavaScript editor" placeholder="// JavaScript" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+                </div>
+            </div>
+        </section>
 
-            <div class="action-bar">
-                <button class="run-btn" onclick="runCode()">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                        <polygon points="5,3 19,12 5,21"/>
-                    </svg>
-                    Run
+        <div class="gutter gutter-main" id="gutter-main" role="separator" tabindex="0" aria-label="Resize editors and preview" aria-valuemin="15" aria-valuemax="85"></div>
+
+        <!-- Preview + console -->
+        <section class="output-pane" id="output-pane" aria-label="Preview">
+            <div class="pane-toolbar">
+                <span class="pane-label">Preview</span>
+                <span class="size-badge" id="size-badge" aria-hidden="true"></span>
+                <span class="spacer"></span>
+                <select id="device-select" class="select" aria-label="Preview width">
+                    <option value="responsive">Responsive</option>
+                    <option value="360">Phone · 360</option>
+                    <option value="390">Phone · 390</option>
+                    <option value="768">Tablet · 768</option>
+                    <option value="1024">Laptop · 1024</option>
+                    <option value="1280">Desktop · 1280</option>
+                </select>
+                <button id="refresh-btn" class="btn btn-icon" type="button" title="Re-run" aria-label="Re-run">
+                    <svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>
                 </button>
-                <button class="download-btn" onclick="downloadHTML()">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="8,17 12,21 16,17"/>
-                        <line x1="12" y1="12" x2="12" y2="21"/>
-                        <path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/>
-                    </svg>
-                    Download HTML
+                <button id="open-tab-btn" class="btn btn-icon" type="button" title="Open preview in a new tab" aria-label="Open preview in a new tab">
+                    <svg class="icon" aria-hidden="true"><use href="#i-external"/></svg>
                 </button>
             </div>
-        </div>
+            <div class="stage" id="stage"></div>
 
-        <!-- Output Pane -->
-        <div class="output-pane">
-            <div class="output-header">
-                <span class="output-label">Output</span>
+            <div class="gutter gutter-console" id="gutter-console" role="separator" tabindex="0" aria-label="Resize console"></div>
+            <div class="console-panel" id="console-panel">
+                <div class="console-header">
+                    <button class="section-toggle" id="console-toggle" type="button" aria-expanded="true" aria-controls="console-body" title="Collapse / expand">
+                        <svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg>
+                        <span class="pane-label">Console</span>
+                        <span class="count-badge error" id="error-count" title="Errors"></span>
+                        <span class="count-badge warn" id="warn-count" title="Warnings"></span>
+                    </button>
+                    <span class="spacer"></span>
+                    <div class="console-filters" role="group" aria-label="Filter console messages">
+                        <button class="btn-mini" type="button" data-filter="all" aria-pressed="true">All</button>
+                        <button class="btn-mini" type="button" data-filter="error" aria-pressed="false">Errors</button>
+                        <button class="btn-mini" type="button" data-filter="warn" aria-pressed="false">Warnings</button>
+                        <button class="btn-mini" type="button" data-filter="log" aria-pressed="false">Logs</button>
+                    </div>
+                    <label class="check" title="Clear the console each time the preview runs">
+                        <input type="checkbox" id="clear-on-run"> Clear on run
+                    </label>
+                    <button class="btn-mini" id="console-clear" type="button" title="Clear console">
+                        <svg class="icon" aria-hidden="true"><use href="#i-ban"/></svg>Clear
+                    </button>
+                </div>
+                <div class="console-body" id="console-body">
+                    <div class="console-entries" id="console-entries" role="log" aria-label="Console output" data-filter="all"></div>
+                    <form class="console-input" id="console-form" autocomplete="off">
+                        <span class="prompt" aria-hidden="true">›</span>
+                        <input id="console-input" type="text" placeholder="Evaluate JavaScript in the preview…" aria-label="Evaluate JavaScript in the preview" spellcheck="false" autocapitalize="off">
+                    </form>
+                </div>
             </div>
-            <iframe id="output"></iframe>
-            <div class="console-header">
-                <span class="console-title">Console</span>
-                <button class="clear-btn" onclick="clearConsole()">Clear</button>
-            </div>
-            <div class="console" id="console"></div>
-        </div>
-
+        </section>
     </main>
 
-    <script>
-        // ── Theme ─────────────────────────────────────────────────────────────
-        const MOON_PATH = 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z';
-        const SUN_PATHS = [
-            { tag: 'circle', attrs: 'cx="12" cy="12" r="5"' },
-            { tag: 'line',   attrs: 'x1="12" y1="1" x2="12" y2="3"' },
-            { tag: 'line',   attrs: 'x1="12" y1="21" x2="12" y2="23"' },
-            { tag: 'line',   attrs: 'x1="4.22" y1="4.22" x2="5.64" y2="5.64"' },
-            { tag: 'line',   attrs: 'x1="18.36" y1="18.36" x2="19.78" y2="19.78"' },
-            { tag: 'line',   attrs: 'x1="1" y1="12" x2="3" y2="12"' },
-            { tag: 'line',   attrs: 'x1="21" y1="12" x2="23" y2="12"' },
-            { tag: 'line',   attrs: 'x1="4.22" y1="19.78" x2="5.64" y2="18.36"' },
-            { tag: 'line',   attrs: 'x1="18.36" y1="5.64" x2="19.78" y2="4.22"' },
-        ];
+    <!-- Projects dialog -->
+    <dialog id="projects-dialog" aria-labelledby="projects-title">
+        <form method="dialog" class="dialog-inner">
+            <div class="dialog-header">
+                <h2 id="projects-title">Projects</h2>
+                <button class="btn btn-icon" value="close" aria-label="Close"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+            </div>
+            <div class="dialog-toolbar">
+                <button type="button" class="btn btn-primary" id="new-project-btn"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>New project</button>
+                <button type="button" class="btn" id="import-btn"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>Import HTML file…</button>
+            </div>
+            <ul class="project-list" id="project-list"></ul>
+        </form>
+    </dialog>
 
-        function setThemeIcon(isDark) {
-            const icon = document.getElementById('theme-icon');
-            icon.innerHTML = isDark
-                ? SUN_PATHS.map(p => `<${p.tag} ${p.attrs}/>`).join('')
-                : `<path d="${MOON_PATH}"/>`;
-            document.getElementById('theme-label').textContent = isDark ? 'Light' : 'Dark';
+    <!-- Settings dialog -->
+    <dialog id="settings-dialog" aria-labelledby="settings-title">
+        <form method="dialog" class="dialog-inner">
+            <div class="dialog-header">
+                <h2 id="settings-title">Resources &amp; settings</h2>
+                <button class="btn btn-icon" value="cancel" aria-label="Close"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+            </div>
+            <div class="dialog-body">
+                <label class="field-label" for="resources-input">External resources <span class="hint">(this project)</span></label>
+                <p class="hint">One URL per line, loaded in order. <code>.css</code> URLs and Google Fonts become stylesheets, <code>.mjs</code> URLs become module scripts, and anything else becomes a classic script.</p>
+                <textarea id="resources-input" rows="4" spellcheck="false" placeholder="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></textarea>
+
+                <label class="field-label" for="head-input">Extra &lt;head&gt; HTML <span class="hint">(this project)</span></label>
+                <p class="hint">Meta tags, font links, an import map…</p>
+                <textarea id="head-input" rows="3" spellcheck="false" placeholder='<link rel="preconnect" href="https://fonts.googleapis.com">'></textarea>
+
+                <label class="check"><input type="checkbox" id="module-input"> Run the JavaScript as an ES module (lets you use <code>import</code>)</label>
+
+                <label class="field-label">Editor</label>
+                <label class="check" style="margin-top:0"><input type="checkbox" id="wrap-input"> Wrap long lines</label>
+
+                <label class="field-label">Keyboard shortcuts</label>
+                <dl class="shortcuts">
+                    <dt><kbd>Ctrl/⌘</kbd> + <kbd>Enter</kbd></dt><dd>Run</dd>
+                    <dt><kbd>Ctrl/⌘</kbd> + <kbd>S</kbd></dt><dd>Save now</dd>
+                    <dt><kbd>Shift</kbd> + <kbd>Alt</kbd> + <kbd>F</kbd></dt><dd>Format the focused editor</dd>
+                    <dt><kbd>Ctrl/⌘</kbd> + <kbd>F</kbd></dt><dd>Find / replace (inside an editor)</dd>
+                    <dt><kbd>Esc</kbd> then <kbd>Tab</kbd></dt><dd>Move focus out of an editor</dd>
+                </dl>
+            </div>
+            <div class="dialog-footer">
+                <button class="btn" value="cancel">Cancel</button>
+                <button class="btn btn-primary" value="save">Save</button>
+            </div>
+        </form>
+    </dialog>
+
+    <input type="file" id="import-file" accept=".html,.htm,text/html" hidden>
+    <div class="toasts" id="toasts" aria-live="polite"></div>
+
+    <script type="module">
+        // ══════════════════════════════════════════════════════════════════════
+        //  Configuration
+        // ══════════════════════════════════════════════════════════════════════
+        const PRETTIER_BASE = 'https://cdn.jsdelivr.net/npm/prettier@3.9.10/';
+        const LANGS = ['html', 'css', 'js'];
+        const LANG_LABEL = { html: 'HTML', css: 'CSS', js: 'JavaScript' };
+        const PRETTIER_PARSER = { html: 'html', css: 'css', js: 'babel' };
+        const KEYS = {
+            projects: 'wap_projects',
+            current:  'wap_current',
+            settings: 'wap_settings',
+            layout:   'wap_layout',
+            theme:    'wap_theme',
+            pending:  'wap_run_pending',
+            previewStorage: id => 'wap_pstore_' + id,
+        };
+        // No allow-same-origin: the preview runs in an opaque origin, so it can't read or modify
+        // this page or its saved projects.
+        const SANDBOX = 'allow-scripts allow-modals allow-forms allow-popups allow-popups-to-escape-sandbox allow-pointer-lock allow-downloads';
+        const MAX_CONSOLE_ENTRIES = 1000;
+
+        const STARTER = {
+            name: 'Hello, prototype',
+            html: `<main class="card">
+  <h1>Hello, prototype 👋</h1>
+  <p>Edit the HTML, CSS and JavaScript — the preview updates as you type.</p>
+  <button id="counter" type="button">Clicked 0 times</button>
+</main>
+`,
+            css: `body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  font-family: system-ui, sans-serif;
+  background: linear-gradient(135deg, #e0e7ff, #fdf2f8);
+}
+
+.card {
+  max-width: 28rem;
+  padding: 2rem;
+  border-radius: 1rem;
+  background: white;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.08);
+}
+
+button {
+  padding: 0.6rem 1.1rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: #4f46e5;
+  color: white;
+  font: inherit;
+  cursor: pointer;
+}
+`,
+            js: `const button = document.querySelector('#counter');
+let count = 0;
+
+button.addEventListener('click', () => {
+  count++;
+  button.textContent = \`Clicked \${count} time\${count === 1 ? '' : 's'}\`;
+  console.log('Clicked!', { count });
+});
+`,
+        };
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  Small utilities
+        // ══════════════════════════════════════════════════════════════════════
+        const $ = (sel, root = document) => root.querySelector(sel);
+        const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+
+        function el(tag, attrs = {}, ...children) {
+            const node = document.createElement(tag);
+            for (const [key, value] of Object.entries(attrs)) {
+                if (value == null || value === false) continue;
+                if (key === 'class') node.className = value;
+                else if (key === 'text') node.textContent = value;
+                else if (key.startsWith('on') && typeof value === 'function') node.addEventListener(key.slice(2), value);
+                else node.setAttribute(key, value === true ? '' : value);
+            }
+            for (const child of children.flat()) if (child != null && child !== false) node.append(child);
+            return node;
         }
 
-        function toggleTheme() {
-            const html = document.documentElement;
-            const isDark = html.getAttribute('data-theme') === 'dark';
-            const next = isDark ? 'light' : 'dark';
-            html.setAttribute('data-theme', next);
-            setThemeIcon(!isDark);
-            localStorage.setItem('wap_theme', next);
+        function icon(name) {
+            const NS = 'http://www.w3.org/2000/svg';
+            const svg = document.createElementNS(NS, 'svg');
+            svg.setAttribute('class', 'icon');
+            svg.setAttribute('aria-hidden', 'true');
+            const use = document.createElementNS(NS, 'use');
+            use.setAttribute('href', '#i-' + name);
+            svg.append(use);
+            return svg;
         }
 
-        // Apply saved or system theme on load
-        (function initTheme() {
-            const saved = localStorage.getItem('wap_theme');
-            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            const theme = saved || (prefersDark ? 'dark' : 'light');
+        function debounce(fn, ms) {
+            let timer = null;
+            const debounced = () => {
+                clearTimeout(timer);
+                timer = setTimeout(() => { timer = null; fn(); }, ms);
+            };
+            debounced.cancel = () => { clearTimeout(timer); timer = null; };
+            debounced.flush = () => { if (timer) { debounced.cancel(); fn(); } };
+            return debounced;
+        }
+
+        const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+        const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+        const countNewlines = s => s.split('\n').length - 1;
+        const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const slugify = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'web-app';
+
+        function relativeTime(ts) {
+            const s = Math.round((Date.now() - ts) / 1000);
+            if (s < 45) return 'just now';
+            const m = Math.round(s / 60);
+            if (m < 60) return `${m} min ago`;
+            const h = Math.round(m / 60);
+            if (h < 24) return `${h} hr${h === 1 ? '' : 's'} ago`;
+            const d = Math.round(h / 24);
+            if (d < 30) return `${d} day${d === 1 ? '' : 's'} ago`;
+            return new Date(ts).toLocaleDateString();
+        }
+
+        function toast(message, kind = 'info', ms = 3500) {
+            const node = el('div', { class: `toast toast-${kind}`, role: kind === 'error' ? 'alert' : 'status' }, message);
+            $('#toasts').append(node);
+            requestAnimationFrame(() => node.classList.add('show'));
+            setTimeout(() => {
+                node.classList.remove('show');
+                setTimeout(() => node.remove(), 250);
+            }, ms);
+        }
+
+        // localStorage can throw (private mode, blocked storage, quota) — never let that break the app.
+        let storageWarned = false;
+        const storage = {
+            read(key, fallback) {
+                try {
+                    const raw = localStorage.getItem(key);
+                    return raw == null ? fallback : JSON.parse(raw);
+                } catch { return fallback; }
+            },
+            write(key, value) {
+                try {
+                    localStorage.setItem(key, JSON.stringify(value));
+                    return true;
+                } catch {
+                    if (!storageWarned) {
+                        storageWarned = true;
+                        toast('Couldn’t save to browser storage (it may be full or blocked). Use Download to keep your work.', 'error', 7000);
+                    }
+                    return false;
+                }
+            },
+            readRaw(key) { try { return localStorage.getItem(key); } catch { return null; } },
+            writeRaw(key, value) { try { localStorage.setItem(key, value); } catch {} },
+            remove(key) { try { localStorage.removeItem(key); } catch {} },
+        };
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  Settings, layout and theme
+        // ══════════════════════════════════════════════════════════════════════
+        const settings = Object.assign(
+            { autoRun: true, clearOnRun: true, layout: 'columns', device: 'responsive', consoleOpen: true, consoleFilter: 'all', wrap: false },
+            storage.read(KEYS.settings, {})
+        );
+        const saveSettings = () => storage.write(KEYS.settings, settings);
+
+        const layout = Object.assign(
+            { split: 50, consoleHeight: 180, grow: [1, 1, 1], collapsed: [false, false, false] },
+            storage.read(KEYS.layout, {})
+        );
+        if (!Array.isArray(layout.grow) || layout.grow.length !== 3 || layout.grow.some(n => !(n > 0))) layout.grow = [1, 1, 1];
+        if (!Array.isArray(layout.collapsed) || layout.collapsed.length !== 3) layout.collapsed = [false, false, false];
+        const saveLayout = () => storage.write(KEYS.layout, layout);
+
+        const themeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+        function applyTheme(theme) {
             document.documentElement.setAttribute('data-theme', theme);
-            setThemeIcon(theme === 'dark');
-        })();
-
-        // ── State persistence via localStorage ────────────────────────────────
-        const STORAGE_KEYS = { html: 'wap_html', css: 'wap_css', js: 'wap_js' };
-
-        function saveState() {
-            localStorage.setItem(STORAGE_KEYS.html, document.getElementById('html').value);
-            localStorage.setItem(STORAGE_KEYS.css,  document.getElementById('css').value);
-            localStorage.setItem(STORAGE_KEYS.js,   document.getElementById('js').value);
+            const dark = theme === 'dark';
+            const btn = $('#theme-btn');
+            btn.querySelector('use').setAttribute('href', dark ? '#i-sun' : '#i-moon');
+            btn.title = `Switch to ${dark ? 'light' : 'dark'} theme`;
+            btn.setAttribute('aria-label', btn.title);
         }
 
-        function loadState() {
-            const html = localStorage.getItem(STORAGE_KEYS.html);
-            const css  = localStorage.getItem(STORAGE_KEYS.css);
-            const js   = localStorage.getItem(STORAGE_KEYS.js);
-            if (html !== null) document.getElementById('html').value = html;
-            if (css  !== null) document.getElementById('css').value  = css;
-            if (js   !== null) document.getElementById('js').value   = js;
-        }
-
-        // Persist on every change
-        ['html', 'css', 'js'].forEach(id => {
-            document.getElementById(id).addEventListener('input', saveState);
+        $('#theme-btn').addEventListener('click', () => {
+            const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            storage.writeRaw(KEYS.theme, next);
+            applyTheme(next);
         });
 
-        // ── Tab key → insert spaces instead of moving focus ───────────────────
-        ['html', 'css', 'js'].forEach(id => {
-            document.getElementById(id).addEventListener('keydown', function(e) {
-                if (e.key === 'Tab') {
-                    e.preventDefault();
-                    const start = this.selectionStart;
-                    const end   = this.selectionEnd;
-                    this.value = this.value.substring(0, start) + '    ' + this.value.substring(end);
-                    this.selectionStart = this.selectionEnd = start + 4;
-                    saveState();
+        // Follow the OS theme until the user picks one explicitly.
+        themeQuery.addEventListener('change', e => {
+            if (!storage.readRaw(KEYS.theme)) applyTheme(e.matches ? 'dark' : 'light');
+        });
+
+        applyTheme(document.documentElement.getAttribute('data-theme') || 'light');
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  Projects
+        // ══════════════════════════════════════════════════════════════════════
+        function newProject(data = {}) {
+            const now = Date.now();
+            return {
+                id: uid(), name: 'Untitled', html: '', css: '', js: '',
+                resources: [], head: '', jsModule: false,
+                created: now, updated: now,
+                ...data,
+            };
+        }
+
+        const readProjects = () => {
+            const all = storage.read(KEYS.projects, {});
+            return all && typeof all === 'object' ? all : {};
+        };
+
+        // Read-modify-write so a second open tab editing a different project isn't clobbered.
+        function persistProject(p) {
+            const all = readProjects();
+            all[p.id] = p;
+            storage.write(KEYS.projects, all);
+        }
+
+        function removeProject(id) {
+            const all = readProjects();
+            delete all[id];
+            storage.write(KEYS.projects, all);
+            storage.remove(KEYS.previewStorage(id));
+        }
+
+        function loadInitialProject() {
+            const all = readProjects();
+            const list = Object.values(all);
+            if (!list.length) {
+                // First launch — migrate code saved by the previous version of the app, if any.
+                const legacy = {};
+                for (const lang of LANGS) {
+                    const value = storage.readRaw('wap_' + lang);
+                    if (value) legacy[lang] = value;
+                }
+                const p = Object.keys(legacy).length ? newProject({ name: 'My prototype', ...legacy }) : newProject(STARTER);
+                persistProject(p);
+                return p;
+            }
+            return all[storage.read(KEYS.current, null)] || list.sort((a, b) => b.updated - a.updated)[0];
+        }
+
+        let project = loadInitialProject();
+        storage.write(KEYS.current, project.id);
+
+        const saveSoon = debounce(() => {
+            project.updated = Date.now();
+            persistProject(project);
+        }, 400);
+
+        function saveNow() {
+            saveSoon.cancel();
+            project.updated = Date.now();
+            persistProject(project);
+        }
+
+        window.addEventListener('pagehide', () => saveSoon.flush());
+        document.addEventListener('visibilitychange', () => { if (document.hidden) saveSoon.flush(); });
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  Editors (plain <textarea> first, upgraded to CodeMirror when it loads)
+        // ══════════════════════════════════════════════════════════════════════
+        let CM = null; // CodeMirror modules + shared extensions, once loaded
+
+        class CodeEditor {
+            constructor(lang) {
+                this.lang = lang;
+                this.section = $(`.editor-section[data-lang="${lang}"]`);
+                this.host = this.section.querySelector('.editor-host');
+                this.textarea = this.host.querySelector('textarea');
+                this.view = null;
+                this.onChange = () => {};
+                this.escapePressed = false;
+                this.textarea.addEventListener('input', () => this.onChange());
+                this.textarea.addEventListener('keydown', e => this.handleTextareaKey(e));
+            }
+
+            get value() {
+                return this.view ? this.view.state.doc.toString() : this.textarea.value;
+            }
+
+            /** Replace the content and reset undo history (used when switching projects). */
+            load(text) {
+                if (this.view) this.view.setState(this.createState(text));
+                else this.textarea.value = text;
+            }
+
+            /** Replace the content as a single undoable edit (used by Format). */
+            replace(text) {
+                if (text === this.value) return;
+                if (this.view) {
+                    this.view.dispatch({ changes: { from: 0, to: this.view.state.doc.length, insert: text } });
+                    return;
+                }
+                const ta = this.textarea;
+                ta.focus();
+                ta.select();
+                // execCommand keeps the browser's native undo stack intact; fall back if unsupported.
+                if (!document.execCommand('insertText', false, text)) {
+                    ta.value = text;
+                    this.onChange();
+                }
+            }
+
+            focus() {
+                (this.view || this.textarea).focus();
+            }
+
+            goTo(line, column = 1) {
+                if (this.view) {
+                    const doc = this.view.state.doc;
+                    const info = doc.line(clamp(line, 1, doc.lines));
+                    const pos = info.from + clamp(column - 1, 0, info.length);
+                    this.view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+                    this.view.focus();
+                    return;
+                }
+                const lines = this.textarea.value.split('\n');
+                const target = clamp(line, 1, lines.length);
+                let pos = 0;
+                for (let i = 0; i < target - 1; i++) pos += lines[i].length + 1;
+                pos += clamp(column - 1, 0, lines[target - 1].length);
+                this.textarea.focus();
+                this.textarea.setSelectionRange(pos, pos);
+                this.textarea.scrollTop = Math.max(0, (target - 4) * 20.8);
+            }
+
+            // Tab / Shift+Tab indentation for the plain-textarea fallback, preserving undo history.
+            handleTextareaKey(e) {
+                if (e.key === 'Escape') { this.escapePressed = true; return; }
+                if (e.key !== 'Tab' || e.ctrlKey || e.metaKey || e.altKey) { this.escapePressed = false; return; }
+                if (this.escapePressed) { this.escapePressed = false; return; } // let focus move on
+                e.preventDefault();
+
+                const ta = this.textarea;
+                const { selectionStart: start, selectionEnd: end, value } = ta;
+                const insert = (text, from, to) => {
+                    ta.setSelectionRange(from, to);
+                    if (!document.execCommand('insertText', false, text)) {
+                        ta.setRangeText(text, from, to, 'end');
+                        this.onChange();
+                    }
+                };
+
+                if (!e.shiftKey && start === end) {
+                    insert('  ', start, end);
+                    return;
+                }
+
+                const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+                let block = value.slice(lineStart, end);
+                const trailingNewline = block.endsWith('\n') && block.length > 1;
+                if (trailingNewline) block = block.slice(0, -1);
+                const updated = e.shiftKey ? block.replace(/^(\t| {1,2})/gm, '') : block.replace(/^/gm, '  ');
+                if (updated === block) return;
+                insert(updated + (trailingNewline ? '\n' : ''), lineStart, end);
+                ta.setSelectionRange(lineStart, lineStart + updated.length);
+            }
+
+            createState(doc) {
+                const { EditorState, EditorView, basicSetup, keymap, indentWithTab, indentUnit, languages, sharedTheme, wrapCompartment } = CM;
+                return EditorState.create({
+                    doc,
+                    extensions: [
+                        basicSetup,
+                        keymap.of([indentWithTab]),
+                        indentUnit.of('  '),
+                        EditorState.tabSize.of(2),
+                        languages[this.lang](),
+                        sharedTheme,
+                        wrapCompartment.of(settings.wrap ? EditorView.lineWrapping : []),
+                        EditorView.contentAttributes.of({ 'aria-label': `${LANG_LABEL[this.lang]} editor` }),
+                        EditorView.updateListener.of(update => { if (update.docChanged) this.onChange(); }),
+                    ],
+                });
+            }
+
+            upgrade() {
+                const hadFocus = document.activeElement === this.textarea;
+                const selection = { anchor: this.textarea.selectionStart, head: this.textarea.selectionEnd };
+                const state = this.createState(this.textarea.value);
+                this.view = new CM.EditorView({ state, parent: this.host });
+                this.textarea.remove();
+                if (hadFocus) {
+                    this.view.dispatch({ selection });
+                    this.view.focus();
+                }
+            }
+
+            setWrap(on) {
+                if (this.view) this.view.dispatch({ effects: CM.wrapCompartment.reconfigure(on ? CM.EditorView.lineWrapping : []) });
+            }
+        }
+
+        const editors = Object.fromEntries(LANGS.map(lang => [lang, new CodeEditor(lang)]));
+
+        async function loadCodeMirror() {
+            const [
+                { basicSetup },
+                { EditorView, keymap },
+                { EditorState, Compartment },
+                { indentWithTab },
+                { html },
+                { css },
+                { javascript },
+                { HighlightStyle, syntaxHighlighting, indentUnit },
+                { tags: t },
+            ] = await Promise.all([
+                import('codemirror'),
+                import('@codemirror/view'),
+                import('@codemirror/state'),
+                import('@codemirror/commands'),
+                import('@codemirror/lang-html'),
+                import('@codemirror/lang-css'),
+                import('@codemirror/lang-javascript'),
+                import('@codemirror/language'),
+                import('@lezer/highlight'),
+            ]);
+
+            // Colors come from CSS variables, so the editor follows the app theme without reconfiguring.
+            const highlight = HighlightStyle.define([
+                { tag: [t.keyword, t.operatorKeyword, t.modifier, t.controlKeyword, t.definitionKeyword, t.moduleKeyword], color: 'var(--syn-keyword)' },
+                { tag: [t.string, t.special(t.string), t.regexp, t.attributeValue], color: 'var(--syn-string)' },
+                { tag: [t.number, t.bool, t.null, t.atom, t.unit, t.color], color: 'var(--syn-number)' },
+                { tag: [t.comment, t.lineComment, t.blockComment, t.docComment], color: 'var(--syn-comment)', fontStyle: 'italic' },
+                { tag: [t.function(t.variableName), t.function(t.propertyName), t.macroName], color: 'var(--syn-function)' },
+                { tag: [t.definition(t.variableName), t.definition(t.propertyName)], color: 'var(--syn-definition)' },
+                { tag: [t.propertyName], color: 'var(--syn-property)' },
+                { tag: [t.typeName, t.className, t.namespace, t.labelName], color: 'var(--syn-type)' },
+                { tag: [t.tagName], color: 'var(--syn-tag)' },
+                { tag: [t.attributeName], color: 'var(--syn-attribute)' },
+                { tag: [t.angleBracket, t.bracket, t.punctuation, t.separator], color: 'var(--syn-punct)' },
+                { tag: [t.meta, t.documentMeta, t.processingInstruction], color: 'var(--syn-comment)' },
+                { tag: t.invalid, color: 'var(--syn-invalid)' },
+                { tag: t.strong, fontWeight: 'bold' },
+                { tag: t.emphasis, fontStyle: 'italic' },
+                { tag: t.link, textDecoration: 'underline' },
+            ]);
+
+            const theme = EditorView.theme({
+                '&': { height: '100%', fontSize: '13px', backgroundColor: 'var(--bg-editor)', color: 'var(--text-primary)' },
+                '&.cm-focused': { outline: 'none' },
+                '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.6' },
+                '.cm-content': { caretColor: 'var(--text-primary)', padding: '6px 0' },
+                '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--text-primary)' },
+                '.cm-gutters': { backgroundColor: 'var(--editor-gutter)', color: 'var(--editor-gutter-fg)', border: 'none', paddingRight: '2px' },
+                '.cm-activeLine': { backgroundColor: 'var(--editor-active)' },
+                '.cm-activeLineGutter': { backgroundColor: 'var(--editor-active)', color: 'var(--text-primary)' },
+                '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': { backgroundColor: 'var(--editor-selection) !important' },
+                '.cm-selectionMatch, .cm-searchMatch': { backgroundColor: 'var(--editor-match)' },
+                '.cm-searchMatch.cm-searchMatch-selected': { backgroundColor: 'var(--editor-selection)' },
+                '&.cm-focused .cm-matchingBracket': { backgroundColor: 'var(--accent-soft)', outline: '1px solid var(--border-strong)' },
+                '.cm-foldPlaceholder': { backgroundColor: 'var(--bg-btn)', border: '1px solid var(--border)', color: 'var(--text-secondary)' },
+                '.cm-tooltip': { backgroundColor: 'var(--bg-pane)', border: '1px solid var(--border)', color: 'var(--text-primary)', borderRadius: '6px', boxShadow: 'var(--shadow)' },
+                '.cm-tooltip-autocomplete > ul': { fontFamily: 'var(--font-mono)' },
+                '.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'var(--accent)', color: '#ffffff' },
+                '.cm-completionDetail': { color: 'var(--text-secondary)' },
+                '.cm-panels': { backgroundColor: 'var(--bg-section)', color: 'var(--text-primary)' },
+                '.cm-panels.cm-panels-bottom': { borderTop: '1px solid var(--border)' },
+                '.cm-panels.cm-panels-top': { borderBottom: '1px solid var(--border)' },
+                '.cm-textfield': { backgroundColor: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)' },
+                '.cm-button': { backgroundImage: 'none', backgroundColor: 'var(--bg-btn)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)' },
+            });
+
+            CM = {
+                EditorState, EditorView, basicSetup, keymap, indentWithTab, indentUnit,
+                wrapCompartment: new Compartment(),
+                sharedTheme: [theme, syntaxHighlighting(highlight)],
+                languages: {
+                    html: () => html({ autoCloseTags: true }),
+                    css: () => css(),
+                    js: () => javascript(),
+                },
+            };
+            for (const editor of Object.values(editors)) editor.upgrade();
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  Formatting (Prettier, loaded lazily on first use)
+        // ══════════════════════════════════════════════════════════════════════
+        let prettierPromise = null;
+
+        function loadPrettier() {
+            if (!prettierPromise) {
+                const files = ['standalone', 'plugins/babel', 'plugins/estree', 'plugins/html', 'plugins/postcss'];
+                prettierPromise = Promise.all(files.map(f => import(`${PRETTIER_BASE}${f}.mjs`)))
+                    .then(([core, ...plugins]) => ({ format: core.format, plugins: plugins.map(m => m.default ?? m) }));
+                prettierPromise.catch(() => { prettierPromise = null; }); // allow retry later
+            }
+            return prettierPromise;
+        }
+
+        async function formatEditor(lang) {
+            const editor = editors[lang];
+            const source = editor.value;
+            if (!source.trim()) return;
+            const button = $(`.format-btn[data-lang="${lang}"]`);
+            button.disabled = true;
+            try {
+                let prettier;
+                try {
+                    prettier = await loadPrettier();
+                } catch {
+                    toast('The formatter couldn’t be loaded — check your internet connection.', 'error', 5000);
+                    return;
+                }
+                try {
+                    const output = await prettier.format(source, { parser: PRETTIER_PARSER[lang], plugins: prettier.plugins });
+                    editor.replace(output);
+                } catch (err) {
+                    const firstLine = String(err && err.message || err).split('\n')[0];
+                    toast(`Couldn’t format ${LANG_LABEL[lang]}: ${firstLine}`, 'error', 6000);
+                }
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        $$('.format-btn').forEach(btn => btn.addEventListener('click', () => formatEditor(btn.dataset.lang)));
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  Preview document
+        // ══════════════════════════════════════════════════════════════════════
+
+        /**
+         * Runs inside the preview iframe (serialised with Function#toString). It forwards console
+         * output and errors to the parent via postMessage, polyfills localStorage/sessionStorage
+         * (unavailable in an opaque-origin sandbox) and evaluates console input.
+         * Must be self-contained ES5-ish code — it cannot reference anything outside itself.
+         */
+        function previewRuntime(cfg) {
+            var TOKEN = cfg.token;
+            var MAX_ITEMS = 100, MAX_DEPTH = 6, MAX_STRING = 10000, MAX_NODES = 2000;
+            var budget = MAX_NODES;
+            var original = {};
+
+            function post(msg) {
+                msg.__wap = TOKEN;
+                try { parent.postMessage(msg, '*'); } catch (e) { /* unserialisable – ignore */ }
+            }
+
+            // Map a line number in the generated document back to the editor it came from.
+            function locate(line, col) {
+                if (!line) return null;
+                if (line > cfg.jsOffset && line <= cfg.jsOffset + cfg.jsLines) return { lang: 'js', line: line - cfg.jsOffset, col: col || 1 };
+                if (line > cfg.htmlOffset && line <= cfg.htmlOffset + cfg.htmlLines) return { lang: 'html', line: line - cfg.htmlOffset, col: col || 1 };
+                return null;
+            }
+
+            function cleanStack(stack) {
+                if (!stack) return '';
+                return String(stack).split('\n').filter(function (l) { return !/previewRuntime|__wapEval/.test(l); }).map(function (l) {
+                    return l.replace(/about:srcdoc:(\d+):(\d+)/g, function (m, line, col) {
+                        var loc = locate(+line, +col);
+                        return loc ? loc.lang + ':' + loc.line + ':' + loc.col : m;
+                    });
+                }).join('\n');
+            }
+
+            function className(o) {
+                try {
+                    var proto = Object.getPrototypeOf(o);
+                    if (proto === null) return 'Object';
+                    return (proto.constructor && proto.constructor.name) || 'Object';
+                } catch (e) { return 'Object'; }
+            }
+
+            function describeNode(n) {
+                if (n.nodeType === 1) {
+                    var s = '<' + n.tagName.toLowerCase();
+                    if (n.id) s += ' id="' + n.id + '"';
+                    if (typeof n.className === 'string' && n.className) s += ' class="' + n.className + '"';
+                    return s + '>';
+                }
+                if (n.nodeType === 3) return '#text "' + n.textContent.slice(0, 60) + '"';
+                if (n.nodeType === 9) return '#document';
+                return n.nodeName;
+            }
+
+            function serialize(v, depth, seen) {
+                budget--;
+                var type = typeof v;
+                if (v === null) return { t: 'null' };
+                if (type === 'undefined') return { t: 'undefined' };
+                if (type === 'string') return { t: 'string', v: v.length > MAX_STRING ? v.slice(0, MAX_STRING) + '…' : v };
+                if (type === 'number') return { t: 'number', v: Object.is(v, -0) ? '-0' : String(v) };
+                if (type === 'boolean') return { t: 'boolean', v: String(v) };
+                if (type === 'bigint') return { t: 'bigint', v: v + 'n' };
+                if (type === 'symbol') return { t: 'symbol', v: v.toString() };
+                if (type === 'function') {
+                    var src = '';
+                    try { src = Function.prototype.toString.call(v); } catch (e) {}
+                    return /^class[\s{]/.test(src)
+                        ? { t: 'function', v: 'class ' + (v.name || 'anonymous') }
+                        : { t: 'function', v: 'ƒ ' + (v.name || 'anonymous') + '()' };
+                }
+                if (seen.indexOf(v) !== -1) return { t: 'circular' };
+
+                var tag = Object.prototype.toString.call(v).slice(8, -1);
+                if (v instanceof Error) return { t: 'error', v: (v.name || 'Error') + ': ' + v.message, stack: cleanStack(v.stack) };
+                if (tag === 'Date') return { t: 'date', v: isNaN(v) ? 'Invalid Date' : v.toISOString() };
+                if (tag === 'RegExp') return { t: 'regexp', v: String(v) };
+                if (typeof Node !== 'undefined' && v instanceof Node) return { t: 'node', v: describeNode(v) };
+                if (v === window) return { t: 'ref', v: 'Window' };
+
+                var isArray = Array.isArray(v) || (ArrayBuffer.isView(v) && !(v instanceof DataView));
+                if (depth >= MAX_DEPTH || budget <= 0) {
+                    return { t: 'ref', v: isArray ? (Array.isArray(v) ? 'Array' : tag) + '(' + v.length + ')' : className(v) };
+                }
+
+                seen = seen.concat([v]);
+                var out = { t: 'object', cls: className(v), entries: [], n: 0, more: 0 };
+                function child(get) {
+                    try { return serialize(get(), depth + 1, seen); }
+                    catch (e) { return { t: 'exception', v: '[Exception: ' + e + ']' }; }
+                }
+
+                if (isArray) {
+                    out.t = 'array';
+                    out.cls = Array.isArray(v) ? 'Array' : tag;
+                    out.n = v.length;
+                    for (var i = 0; i < Math.min(v.length, MAX_ITEMS); i++) {
+                        (function (idx) { out.entries.push([String(idx), child(function () { return v[idx]; })]); })(i);
+                    }
+                } else if (tag === 'Map') {
+                    out.t = 'map';
+                    out.n = v.size;
+                    v.forEach(function (val, key) {
+                        if (out.entries.length < MAX_ITEMS) out.entries.push([child(function () { return key; }), child(function () { return val; })]);
+                    });
+                } else if (tag === 'Set') {
+                    out.t = 'set';
+                    out.n = v.size;
+                    v.forEach(function (val) {
+                        if (out.entries.length < MAX_ITEMS) out.entries.push([null, child(function () { return val; })]);
+                    });
+                } else {
+                    var keys = [];
+                    try { keys = Object.keys(v); } catch (e) {}
+                    out.n = keys.length;
+                    for (var k = 0; k < Math.min(keys.length, MAX_ITEMS); k++) {
+                        (function (key) { out.entries.push([key, child(function () { return v[key]; })]); })(keys[k]);
+                    }
+                }
+                out.more = Math.max(0, out.n - out.entries.length);
+                return out;
+            }
+
+            function serializeAll(args) {
+                budget = MAX_NODES;
+                var result = [];
+                for (var i = 0; i < args.length; i++) result.push(serialize(args[i], 0, []));
+                return result;
+            }
+
+            // Basic printf-style substitutions (%s %d %i %f %o %O %c).
+            function applyFormat(args) {
+                args = Array.prototype.slice.call(args);
+                if (typeof args[0] !== 'string' || !/%[sdifoOc%]/.test(args[0])) return args;
+                var rest = args.slice(1), used = 0;
+                var text = args[0].replace(/%([sdifoOc%])/g, function (match, c) {
+                    if (c === '%') return '%';
+                    if (used >= rest.length) return match;
+                    var a = rest[used++];
+                    if (c === 's') return String(a);
+                    if (c === 'd' || c === 'i') return String(parseInt(a, 10));
+                    if (c === 'f') return String(parseFloat(a));
+                    if (c === 'c') return '';
+                    try { return JSON.stringify(a); } catch (e) { return String(a); }
+                });
+                return [text].concat(rest.slice(used));
+            }
+
+            function emit(level, args, extra) {
+                var msg = { type: 'console', level: level, args: serializeAll(applyFormat(args)) };
+                if (extra) for (var k in extra) msg[k] = extra[k];
+                post(msg);
+            }
+
+            function wrap(name, fn) {
+                original[name] = console[name];
+                console[name] = function () {
+                    try { fn.apply(null, arguments); } catch (e) {}
+                    if (original[name]) return original[name].apply(console, arguments);
+                };
+            }
+
+            ['log', 'info', 'debug', 'warn', 'error', 'dir'].forEach(function (name) {
+                wrap(name, function () { emit(name === 'dir' ? 'log' : name, arguments); });
+            });
+            wrap('trace', function () {
+                emit('log', ['console.trace'].concat(Array.prototype.slice.call(arguments)), { stack: cleanStack(new Error().stack).split('\n').slice(2).join('\n') });
+            });
+            wrap('assert', function (condition) {
+                if (condition) return;
+                var rest = Array.prototype.slice.call(arguments, 1);
+                if (typeof rest[0] === 'string') rest[0] = 'Assertion failed: ' + rest[0];
+                else rest.unshift('Assertion failed');
+                emit('error', rest);
+            });
+            var counts = {}, timers = {};
+            wrap('count', function (label) {
+                label = label === undefined ? 'default' : String(label);
+                counts[label] = (counts[label] || 0) + 1;
+                emit('log', [label + ': ' + counts[label]]);
+            });
+            wrap('countReset', function (label) { counts[label === undefined ? 'default' : String(label)] = 0; });
+            wrap('time', function (label) { timers[label === undefined ? 'default' : String(label)] = performance.now(); });
+            function timeReport(label, end, extra) {
+                label = label === undefined ? 'default' : String(label);
+                if (!(label in timers)) { emit('warn', ["Timer '" + label + "' does not exist"]); return; }
+                emit('log', [label + ': ' + (performance.now() - timers[label]).toFixed(2) + ' ms'].concat(extra || []));
+                if (end) delete timers[label];
+            }
+            wrap('timeLog', function (label) { timeReport(label, false, Array.prototype.slice.call(arguments, 1)); });
+            wrap('timeEnd', function (label) { timeReport(label, true); });
+            wrap('group', function () { post({ type: 'group', collapsed: false, args: serializeAll(applyFormat(arguments)) }); });
+            wrap('groupCollapsed', function () { post({ type: 'group', collapsed: true, args: serializeAll(applyFormat(arguments)) }); });
+            wrap('groupEnd', function () { post({ type: 'groupEnd' }); });
+            wrap('clear', function () { post({ type: 'clear' }); });
+            wrap('table', function (data, columns) {
+                if (data === null || typeof data !== 'object') { emit('log', [data]); return; }
+                budget = MAX_NODES;
+                var rowKeys = Object.keys(data).slice(0, MAX_ITEMS), cols = [], hasValue = false, rows = [];
+                rowKeys.forEach(function (rk) {
+                    var row = data[rk];
+                    if (row !== null && typeof row === 'object') {
+                        Object.keys(row).forEach(function (c) { if (cols.indexOf(c) === -1) cols.push(c); });
+                    } else hasValue = true;
+                });
+                if (Array.isArray(columns)) cols = columns.map(String);
+                rowKeys.forEach(function (rk) {
+                    var row = data[rk], cells = [{ t: 'string', v: rk }];
+                    cols.forEach(function (c) {
+                        cells.push(row !== null && typeof row === 'object' && c in row ? serialize(row[c], 5, []) : { t: 'empty' });
+                    });
+                    if (hasValue) cells.push(row !== null && typeof row === 'object' ? { t: 'empty' } : serialize(row, 5, []));
+                    rows.push(cells);
+                });
+                post({ type: 'console', level: 'log', args: [], table: { columns: ['(index)'].concat(cols, hasValue ? ['Value'] : []), rows: rows } });
+            });
+
+            // Uncaught errors (capture phase also sees failed <img>/<script>/<link> loads).
+            window.addEventListener('error', function (e) {
+                var target = e.target;
+                if (target && target !== window && target.tagName) {
+                    post({ type: 'console', level: 'error', args: [{ t: 'string', v: 'Failed to load <' + target.tagName.toLowerCase() + '>: ' + (target.src || target.href || '') }] });
+                    return;
+                }
+                var loc = (!e.filename || e.filename === 'about:srcdoc') ? locate(e.lineno, e.colno) : null;
+                var message = e.message || (e.error && String(e.error)) || 'Script error';
+                if (e.filename && e.filename !== 'about:srcdoc' && !loc) message += '  (' + e.filename + ':' + e.lineno + ')';
+                post({ type: 'console', level: 'error', args: [{ t: 'string', v: message }], loc: loc, stack: e.error && e.error.stack ? cleanStack(e.error.stack) : '' });
+            }, true);
+
+            window.addEventListener('unhandledrejection', function (e) {
+                var r = e.reason;
+                var text = r instanceof Error ? (r.name || 'Error') + ': ' + r.message : (function () { try { return JSON.stringify(r); } catch (x) { return String(r); } })();
+                post({ type: 'console', level: 'error', args: [{ t: 'string', v: 'Uncaught (in promise) ' + text }], stack: r && r.stack ? cleanStack(r.stack) : '' });
+            });
+
+            // In-memory Storage replacement for the sandbox; localStorage changes persist per project.
+            function makeStorage(initial, onChange) {
+                var data = {};
+                for (var key in initial) if (Object.prototype.hasOwnProperty.call(initial, key)) data[key] = String(initial[key]);
+                function changed() { if (onChange) onChange(data); }
+                var api = {
+                    get length() { return Object.keys(data).length; },
+                    key: function (i) { var keys = Object.keys(data); return i < keys.length ? keys[i] : null; },
+                    getItem: function (k) { k = String(k); return Object.prototype.hasOwnProperty.call(data, k) ? data[k] : null; },
+                    setItem: function (k, v) { data[String(k)] = String(v); changed(); },
+                    removeItem: function (k) { delete data[String(k)]; changed(); },
+                    clear: function () { data = {}; changed(); }
+                };
+                return new Proxy(api, {
+                    get: function (target, prop) {
+                        if (prop in target) return target[prop];
+                        if (typeof prop === 'string' && Object.prototype.hasOwnProperty.call(data, prop)) return data[prop];
+                        return undefined;
+                    },
+                    set: function (target, prop, value) { target.setItem(prop, value); return true; },
+                    deleteProperty: function (target, prop) { target.removeItem(prop); return true; },
+                    has: function (target, prop) { return prop in target || Object.prototype.hasOwnProperty.call(data, prop); },
+                    ownKeys: function () { return Object.keys(data); },
+                    getOwnPropertyDescriptor: function (target, prop) {
+                        if (Object.prototype.hasOwnProperty.call(data, prop)) return { value: data[prop], writable: true, enumerable: true, configurable: true };
+                        return undefined;
+                    }
+                });
+            }
+            [['localStorage', cfg.storage, function (data) { post({ type: 'storage', data: data }); }], ['sessionStorage', {}, null]].forEach(function (spec) {
+                var works = false;
+                try { works = !!window[spec[0]] && (window[spec[0]].length, true); } catch (e) {}
+                if (!works) {
+                    try { Object.defineProperty(window, spec[0], { value: makeStorage(spec[1] || {}, spec[2]), configurable: true }); } catch (e) {}
                 }
             });
-        });
 
-        // ── Ctrl+Enter keyboard shortcut to run ───────────────────────────────
-        document.addEventListener('keydown', function(e) {
-            if (e.ctrlKey && e.key === 'Enter') {
-                e.preventDefault();
-                runCode();
+            // Evaluate expressions typed into the console.
+            window.addEventListener('message', function (e) {
+                var d = e.data;
+                if (e.source !== parent || !d || d.__wap !== TOKEN || d.type !== 'eval') return;
+                var result;
+                try {
+                    result = (0, eval)(d.code);
+                } catch (err) {
+                    post({ type: 'console', level: 'error', args: [{ t: 'string', v: 'Uncaught ' + (err && err.name ? err.name + ': ' + err.message : String(err)) }] });
+                    return;
+                }
+                emit('result', [result]);
+            });
+
+            document.addEventListener('DOMContentLoaded', function () { post({ type: 'ready' }); });
+        }
+
+        function resourceTag(url) {
+            const safe = escapeHtml(url);
+            if (/\.css([?#]|$)/i.test(url) || /fonts\.googleapis\.com\/css/i.test(url)) return `<link rel="stylesheet" href="${safe}">`;
+            if (/\.mjs([?#]|$)/i.test(url)) return `<script type="module" src="${safe}"><\/script>`;
+            return `<script src="${safe}"><\/script>`;
+        }
+
+        /**
+         * Build a complete HTML document from a project.
+         * With `preview` set, the console/error runtime is injected and line offsets are recorded
+         * so errors can be mapped back to editor line numbers.
+         */
+        function buildDocument(p, { preview = false, token = '', previewStorage = {} } = {}) {
+            // Stop user code from accidentally closing the surrounding <script>/<style> element.
+            const js = p.js.replace(/<\/(script)/gi, '<\\/$1');
+            const css = p.css.replace(/<\/(style)/gi, '<\\/$1');
+            const resources = (p.resources || []).map(resourceTag).join('\n');
+
+            let runtime = '';
+            if (preview) {
+                const cfg = { token, jsOffset: '@@JS_OFFSET@@', jsLines: countNewlines(p.js) + 1, htmlOffset: '@@HTML_OFFSET@@', htmlLines: countNewlines(p.html) + 1, storage: previewStorage };
+                const cfgJson = JSON.stringify(cfg).replace(/</g, '\\u003c');
+                runtime = `<script>(${previewRuntime.toString()})(${cfgJson});<\/script>\n`;
+            }
+
+            const beforeHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${escapeHtml(p.name || 'Web App')}</title>
+${runtime}${resources ? resources + '\n' : ''}${p.head ? p.head + '\n' : ''}<style>
+${css}
+</style>
+</head>
+<body>
+`;
+            const beforeJs = `${beforeHtml}${p.html}
+<script${p.jsModule ? ' type="module"' : ''}>
+`;
+            const doc = `${beforeJs}${js}
+<\/script>
+</body>
+</html>
+`;
+            if (!preview) return doc;
+            // Replacing the placeholders doesn't change line counts, so the offsets stay valid.
+            return doc
+                .replace('"@@JS_OFFSET@@"', String(countNewlines(beforeJs)))
+                .replace('"@@HTML_OFFSET@@"', String(countNewlines(beforeHtml)));
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  Running the preview
+        // ══════════════════════════════════════════════════════════════════════
+        const stage = $('#stage');
+        let frame = null;
+        let runToken = null;
+        let dirtySinceRun = true;
+        let autoRunPaused = false;
+
+        function run() {
+            autoRunSoon.cancel();
+            autoRunPaused = false;
+            dirtySinceRun = false;
+            if (settings.clearOnRun) consoleUI.clear();
+
+            runToken = uid();
+            const doc = buildDocument(project, {
+                preview: true,
+                token: runToken,
+                previewStorage: storage.read(KEYS.previewStorage(project.id), {}),
+            });
+
+            // A brand-new iframe every run: old timers, listeners and globals all disappear.
+            const next = document.createElement('iframe');
+            next.title = 'Preview output';
+            next.setAttribute('sandbox', SANDBOX);
+            next.setAttribute('allow', 'fullscreen; clipboard-write; autoplay');
+            next.srcdoc = doc;
+
+            // If the page never finishes loading (e.g. an infinite loop), the flag survives a reload
+            // and auto-run is paused next time instead of freezing again.
+            storage.writeRaw(KEYS.pending, project.id);
+            next.addEventListener('load', () => storage.remove(KEYS.pending), { once: true });
+
+            stage.replaceChildren(next);
+            frame = next;
+        }
+
+        const autoRunSoon = debounce(() => { if (settings.autoRun && !autoRunPaused) run(); }, 700);
+
+        function showStagePlaceholder(text) {
+            frame = null;
+            stage.replaceChildren(el('div', { class: 'stage-empty' }, text));
+        }
+
+        window.addEventListener('message', e => {
+            if (!frame || e.source !== frame.contentWindow) return;
+            const msg = e.data;
+            if (!msg || msg.__wap !== runToken) return;
+            switch (msg.type) {
+                case 'console':  consoleUI.add(msg); break;
+                case 'group':    consoleUI.group(msg); break;
+                case 'groupEnd': consoleUI.groupEnd(); break;
+                case 'clear':    consoleUI.clear(); consoleUI.system('Console was cleared'); break;
+                case 'storage':  storage.write(KEYS.previewStorage(project.id), msg.data); break;
+                case 'ready':    storage.remove(KEYS.pending); break;
             }
         });
 
-        // ── Console helpers ───────────────────────────────────────────────────
-        function appendToConsole(message, level) {
-            const consoleEl = document.getElementById('console');
-            const line = document.createElement('div');
-            line.className = level;
-            const prefix = level === 'error' ? '[error] ' : level === 'warn' ? '[warn]  ' : '[log]   ';
-            line.textContent = prefix + message;
-            consoleEl.appendChild(line);
-            consoleEl.scrollTop = consoleEl.scrollHeight;
+        function onEditorChange(lang) {
+            project[lang] = editors[lang].value;
+            dirtySinceRun = true;
+            saveSoon();
+            if (settings.autoRun) autoRunSoon();
         }
+        for (const lang of LANGS) editors[lang].onChange = () => onEditorChange(lang);
 
-        function clearConsole() {
-            document.getElementById('console').innerHTML = '';
-        }
+        $('#run-btn').addEventListener('click', run);
+        $('#refresh-btn').addEventListener('click', run);
 
-        // ── Run code ──────────────────────────────────────────────────────────
-        function runCode() {
-            const htmlCode = document.getElementById('html').value;
-            const cssCode  = document.getElementById('css').value;
-            const jsCode   = document.getElementById('js').value;
-
-            const iframe = document.getElementById('output');
-            const iframeDocument = iframe.contentDocument || iframe.contentWindow.document;
-
-            // Write the combined code to the iframe
-            iframeDocument.open();
-            iframeDocument.write(`
-                <style>${cssCode}</style>
-                ${htmlCode}
-                <script>
-                    (function() {
-                        function send(level, args) {
-                            var msg = Array.prototype.slice.call(args).join(' ');
-                            parent.document.dispatchEvent(
-                                new CustomEvent('iframe-console', { detail: { level: level, message: msg } })
-                            );
-                        }
-                        var orig = { log: console.log, warn: console.warn, error: console.error };
-                        console.log   = function() { send('log',   arguments); orig.log.apply(console, arguments); };
-                        console.warn  = function() { send('warn',  arguments); orig.warn.apply(console, arguments); };
-                        console.error = function() { send('error', arguments); orig.error.apply(console, arguments); };
-
-                        window.onerror = function(msg, src, line, col) {
-                            send('error', [msg + ' (line ' + line + ')']);
-                            return true;
-                        };
-                        window.addEventListener('unhandledrejection', function(e) {
-                            send('error', ['Unhandled promise rejection: ' + (e.reason && e.reason.message || e.reason)]);
-                        });
-                    })();
-                    ${jsCode}
-                <\/script>
-            `);
-            iframeDocument.close();
-        }
-
-        // Receive console events from iframe via CustomEvent
-        document.addEventListener('iframe-console', function(e) {
-            appendToConsole(e.detail.message, e.detail.level);
+        const autoRunInput = $('#autorun');
+        autoRunInput.addEventListener('change', () => {
+            settings.autoRun = autoRunInput.checked;
+            saveSettings();
+            if (settings.autoRun && dirtySinceRun) run();
         });
 
-        // ── Formatters ────────────────────────────────────────────────────────
-        function htmlfix() {
-            document.getElementById('html').value = html_beautify(document.getElementById('html').value);
-            saveState();
+        // ══════════════════════════════════════════════════════════════════════
+        //  Console panel
+        // ══════════════════════════════════════════════════════════════════════
+        const consoleUI = (() => {
+            const root = $('#console-entries');
+            let groups = [];
+            let last = null;
+            const counts = { error: 0, warn: 0 };
+            const ICONS = { error: '✕', warn: '⚠', info: 'ℹ', input: '›', result: '←' };
+
+            const container = () => groups[groups.length - 1] || root;
+
+            function updateBadges() {
+                for (const kind of ['error', 'warn']) {
+                    const badge = $(`#${kind}-count`);
+                    badge.textContent = counts[kind] > 99 ? '99+' : String(counts[kind]);
+                    badge.classList.toggle('show', counts[kind] > 0);
+                    badge.setAttribute('aria-label', `${counts[kind]} ${kind === 'error' ? 'errors' : 'warnings'}`);
+                }
+            }
+
+            function inlinePreview(n, nested = false) {
+                switch (n.t) {
+                    case 'string': return nested ? JSON.stringify(n.v) : n.v;
+                    case 'undefined': case 'null': return n.t;
+                    case 'empty': return '';
+                    case 'circular': return '[Circular]';
+                    case 'array': case 'object': case 'map': case 'set': {
+                        const label = n.t === 'array' ? `${n.cls === 'Array' ? '' : n.cls}(${n.n})` : n.t === 'object' ? (n.cls === 'Object' ? '' : n.cls) : `${n.cls}(${n.n})`;
+                        if (nested) return n.t === 'object' ? (label || '{…}') : (n.t === 'array' && n.cls === 'Array' ? `Array(${n.n})` : label);
+                        const parts = n.entries.slice(0, 5).map(([k, v]) => {
+                            if (n.t === 'array' || n.t === 'set') return inlinePreview(v, true);
+                            if (n.t === 'map') return `${inlinePreview(k, true)} => ${inlinePreview(v, true)}`;
+                            return `${k}: ${inlinePreview(v, true)}`;
+                        });
+                        if (n.n > 5) parts.push('…');
+                        const [open, close] = n.t === 'array' ? ['[', ']'] : ['{', '}'];
+                        return `${label ? label + ' ' : ''}${open}${parts.join(', ')}${close}`;
+                    }
+                    default: return n.v ?? '';
+                }
+            }
+
+            function renderValue(n, top = false) {
+                const span = (cls, text) => el('span', { class: cls }, text);
+                switch (n.t) {
+                    case 'string': return top ? span('v-str-top', n.v) : span('v-str', JSON.stringify(n.v));
+                    case 'number': case 'bigint': return span('v-num', n.v);
+                    case 'boolean': return span('v-bool', n.v);
+                    case 'null': case 'undefined': return span('v-null', n.t);
+                    case 'symbol': return span('v-sym', n.v);
+                    case 'function': return span('v-fn', n.v);
+                    case 'date': return span('v-date', n.v);
+                    case 'regexp': return span('v-re', n.v);
+                    case 'node': return span('v-node', n.v);
+                    case 'circular': return span('v-meta', '[Circular]');
+                    case 'ref': return span('v-meta', n.v);
+                    case 'exception': return span('v-err', n.v);
+                    case 'empty': return span('v-null', '');
+                    case 'error': {
+                        if (!n.stack) return span('v-err', n.v);
+                        const d = el('details', { class: 'v-tree' }, el('summary', {}, span('v-err', n.v)));
+                        d.append(el('div', { class: 'v-children' }, n.stack.split('\n').slice(1).join('\n')));
+                        return d;
+                    }
+                    case 'array': case 'object': case 'map': case 'set': return renderTree(n);
+                    default: return span('v-meta', String(n.v ?? ''));
+                }
+            }
+
+            // Expandable object/array view; children are built lazily on first expand.
+            function renderTree(n) {
+                const details = el('details', { class: 'v-tree' }, el('summary', {}, el('span', { class: 'v-preview' }, inlinePreview(n))));
+                details.addEventListener('toggle', () => {
+                    if (!details.open || details.dataset.filled) return;
+                    details.dataset.filled = '1';
+                    const body = el('div', { class: 'v-children' });
+                    for (const [key, value] of n.entries) {
+                        const row = el('div', { class: 'v-row' });
+                        if (n.t === 'map') row.append(renderValue(key), el('span', { class: 'v-meta' }, ' => '), renderValue(value));
+                        else if (n.t === 'set') row.append(renderValue(value));
+                        else row.append(el('span', { class: 'v-key' }, key), ': ', renderValue(value));
+                        body.append(row);
+                    }
+                    if (n.more) body.append(el('div', { class: 'v-meta' }, `… ${n.more} more`));
+                    if (!n.entries.length) body.append(el('div', { class: 'v-meta' }, n.t === 'array' ? '(empty)' : 'No enumerable properties'));
+                    details.append(body);
+                });
+                return details;
+            }
+
+            function renderTable(table) {
+                return el('table', { class: 'v-table' },
+                    el('thead', {}, el('tr', {}, table.columns.map(c => el('th', {}, c)))),
+                    el('tbody', {}, table.rows.map(cells => el('tr', {}, cells.map(c => el('td', {}, inlinePreview(c, true).replace(/^"(.*)"$/, '$1')))))));
+            }
+
+            function locationButton(loc) {
+                return el('button', {
+                    class: 'entry-loc', type: 'button',
+                    title: `Go to ${LANG_LABEL[loc.lang]} line ${loc.line}`,
+                    onclick: () => { revealEditor(loc.lang); editors[loc.lang].goTo(loc.line, loc.col); },
+                }, `${loc.lang}:${loc.line}`);
+            }
+
+            function append(node) {
+                const atBottom = root.scrollHeight - root.scrollTop - root.clientHeight < 40;
+                container().append(node);
+                while (root.childElementCount > MAX_CONSOLE_ENTRIES) root.firstElementChild.remove();
+                if (atBottom) root.scrollTop = root.scrollHeight;
+            }
+
+            function add(msg) {
+                const level = msg.level || 'log';
+                const key = !msg.table && level !== 'input' ? level + JSON.stringify(msg.args) + JSON.stringify(msg.loc || null) : null;
+
+                // Collapse identical consecutive messages into a repeat counter.
+                if (key && last && last.key === key && last.node.isConnected && last.parent === container()) {
+                    last.count++;
+                    let badge = last.node.querySelector('.entry-repeat');
+                    if (!badge) {
+                        badge = el('span', { class: 'entry-repeat' });
+                        last.node.prepend(badge);
+                    }
+                    badge.textContent = String(last.count);
+                    if (counts[level] !== undefined) { counts[level]++; updateBadges(); }
+                    return;
+                }
+
+                const message = el('div', { class: 'entry-msg' });
+                const top = level !== 'result';
+                (msg.args || []).forEach((arg, i) => message.append(i ? ' ' : '', renderValue(arg, top)));
+                if (msg.table) message.append(renderTable(msg.table));
+                if (msg.stack) {
+                    const lines = msg.stack.split('\n').filter(l => /^\s+at |@/.test(l));
+                    if (lines.length) message.append(el('details', { class: 'entry-stack' }, el('summary', {}, 'Stack trace'), el('pre', {}, lines.join('\n'))));
+                }
+
+                const node = el('div', { class: `entry entry-${level}` },
+                    el('span', { class: 'entry-icon', 'aria-hidden': 'true' }, ICONS[level] || ''),
+                    message,
+                    msg.loc ? locationButton(msg.loc) : null);
+
+                append(node);
+                last = key ? { key, node, count: 1, parent: container() } : null;
+                if (counts[level] !== undefined) { counts[level]++; updateBadges(); }
+            }
+
+            function group(msg) {
+                const body = el('div', { class: 'group-body' });
+                const summary = el('summary', {});
+                (msg.args || []).forEach(arg => summary.append(renderValue(arg, true), ' '));
+                if (!msg.args || !msg.args.length) summary.append('console.group');
+                const details = el('details', { class: 'entry-group' }, summary, body);
+                details.open = !msg.collapsed;
+                append(details);
+                groups.push(body);
+                last = null;
+            }
+
+            function groupEnd() {
+                groups.pop();
+                last = null;
+            }
+
+            function clear() {
+                root.replaceChildren();
+                groups = [];
+                last = null;
+                counts.error = counts.warn = 0;
+                updateBadges();
+            }
+
+            function system(text) {
+                append(el('div', { class: 'entry entry-system' }, el('span', { class: 'entry-icon' }), el('div', { class: 'entry-msg' }, text)));
+                last = null;
+            }
+
+            function setFilter(filter) {
+                root.dataset.filter = filter;
+                $$('.console-filters [data-filter]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.filter === filter)));
+            }
+
+            return { add, group, groupEnd, clear, system, setFilter };
+        })();
+
+        $('#console-clear').addEventListener('click', () => consoleUI.clear());
+
+        const clearOnRunInput = $('#clear-on-run');
+        clearOnRunInput.addEventListener('change', () => { settings.clearOnRun = clearOnRunInput.checked; saveSettings(); });
+
+        $$('.console-filters [data-filter]').forEach(btn => btn.addEventListener('click', () => {
+            settings.consoleFilter = btn.dataset.filter;
+            consoleUI.setFilter(settings.consoleFilter);
+            saveSettings();
+        }));
+
+        // Console input with history (↑ / ↓).
+        const consoleInput = $('#console-input');
+        const inputHistory = [];
+        let historyIndex = 0;
+
+        $('#console-form').addEventListener('submit', e => {
+            e.preventDefault();
+            const code = consoleInput.value;
+            if (!code.trim()) return;
+            inputHistory.push(code);
+            historyIndex = inputHistory.length;
+            consoleInput.value = '';
+            consoleUI.add({ level: 'input', args: [{ t: 'string', v: code }] });
+            if (!frame) {
+                consoleUI.add({ level: 'warn', args: [{ t: 'string', v: 'Run the preview first.' }] });
+                return;
+            }
+            frame.contentWindow.postMessage({ __wap: runToken, type: 'eval', code }, '*');
+        });
+
+        consoleInput.addEventListener('keydown', e => {
+            if (e.key === 'ArrowUp' && historyIndex > 0) {
+                e.preventDefault();
+                consoleInput.value = inputHistory[--historyIndex];
+            } else if (e.key === 'ArrowDown' && historyIndex < inputHistory.length) {
+                e.preventDefault();
+                historyIndex++;
+                consoleInput.value = inputHistory[historyIndex] ?? '';
+            }
+        });
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  Layout: resizable panes, collapsible sections, rows/columns, device widths
+        // ══════════════════════════════════════════════════════════════════════
+        const appMain = $('#app-main');
+        const sections = LANGS.map(lang => $(`.editor-section[data-lang="${lang}"]`));
+        const sectionGutters = $$('.gutter-section');
+        const consolePanel = $('#console-panel');
+        const isRows = () => settings.layout === 'rows';
+
+        function applyLayout() {
+            document.body.classList.toggle('layout-rows', isRows());
+            document.body.classList.toggle('layout-columns', !isRows());
+            appMain.style.setProperty('--split', `${layout.split}%`);
+            const mainGutter = $('#gutter-main');
+            mainGutter.setAttribute('aria-orientation', isRows() ? 'horizontal' : 'vertical');
+            mainGutter.setAttribute('aria-valuenow', String(Math.round(layout.split)));
+
+            sections.forEach((section, i) => {
+                section.style.setProperty('--grow', String(layout.grow[i]));
+                section.classList.toggle('collapsed', layout.collapsed[i]);
+                section.querySelector('.section-toggle').setAttribute('aria-expanded', String(!layout.collapsed[i]));
+            });
+            sectionGutters.forEach((gutter, i) => {
+                const disabled = layout.collapsed[i] || layout.collapsed[i + 1];
+                gutter.classList.toggle('disabled', disabled);
+                gutter.tabIndex = disabled ? -1 : 0;
+                gutter.setAttribute('aria-orientation', isRows() ? 'vertical' : 'horizontal');
+            });
+
+            consolePanel.style.setProperty('--console-h', `${layout.consoleHeight}px`);
+            consolePanel.classList.toggle('collapsed', !settings.consoleOpen);
+            $('#gutter-console').classList.toggle('disabled', !settings.consoleOpen);
+            $('#console-toggle').setAttribute('aria-expanded', String(settings.consoleOpen));
+
+            const layoutBtn = $('#layout-btn');
+            layoutBtn.querySelector('use').setAttribute('href', isRows() ? '#i-columns' : '#i-rows');
+            layoutBtn.title = isRows() ? 'Switch to side-by-side layout' : 'Switch to stacked layout';
+            layoutBtn.setAttribute('aria-label', layoutBtn.title);
         }
 
-        function cssfix() {
-            document.getElementById('css').value = css_beautify(document.getElementById('css').value);
-            saveState();
+        function makeResizable(gutter, { axis, onMove, onKey }) {
+            gutter.addEventListener('pointerdown', e => {
+                if (e.button !== 0 || gutter.classList.contains('disabled')) return;
+                e.preventDefault();
+                gutter.setPointerCapture(e.pointerId);
+                gutter.classList.add('active');
+                document.body.classList.add('is-resizing', axis() === 'x' ? 'resize-col' : 'resize-row');
+                const move = ev => onMove(ev);
+                const stop = () => {
+                    gutter.classList.remove('active');
+                    document.body.classList.remove('is-resizing', 'resize-col', 'resize-row');
+                    gutter.removeEventListener('pointermove', move);
+                    gutter.removeEventListener('pointerup', stop);
+                    gutter.removeEventListener('pointercancel', stop);
+                    saveLayout();
+                };
+                gutter.addEventListener('pointermove', move);
+                gutter.addEventListener('pointerup', stop);
+                gutter.addEventListener('pointercancel', stop);
+            });
+            gutter.addEventListener('keydown', e => {
+                const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];
+                if (!step) return;
+                e.preventDefault();
+                onKey(step * (e.shiftKey ? 5 : 1));
+                saveLayout();
+            });
         }
 
-        function jsfix() {
-            document.getElementById('js').value = js_beautify(document.getElementById('js').value);
-            saveState();
+        // Editors ↔ preview
+        makeResizable($('#gutter-main'), {
+            axis: () => (isRows() ? 'y' : 'x'),
+            onMove: e => {
+                const r = appMain.getBoundingClientRect();
+                const ratio = isRows() ? (e.clientY - r.top) / r.height : (e.clientX - r.left) / r.width;
+                layout.split = clamp(ratio * 100, 15, 85);
+                applyLayout();
+            },
+            onKey: step => { layout.split = clamp(layout.split + step * 2, 15, 85); applyLayout(); },
+        });
+
+        // Between editor sections
+        sectionGutters.forEach((gutter, i) => {
+            const resizeTo = ratio => {
+                const total = layout.grow[i] + layout.grow[i + 1];
+                const r = clamp(ratio, 0.1, 0.9);
+                layout.grow[i] = total * r;
+                layout.grow[i + 1] = total - layout.grow[i];
+                applyLayout();
+            };
+            makeResizable(gutter, {
+                axis: () => (isRows() ? 'x' : 'y'),
+                onMove: e => {
+                    const a = sections[i].getBoundingClientRect();
+                    const b = sections[i + 1].getBoundingClientRect();
+                    const ratio = isRows() ? (e.clientX - a.left) / (b.right - a.left) : (e.clientY - a.top) / (b.bottom - a.top);
+                    resizeTo(ratio);
+                },
+                onKey: step => resizeTo(layout.grow[i] / (layout.grow[i] + layout.grow[i + 1]) + step * 0.05),
+            });
+        });
+
+        // Preview ↔ console
+        makeResizable($('#gutter-console'), {
+            axis: () => 'y',
+            onMove: e => {
+                const r = $('#output-pane').getBoundingClientRect();
+                layout.consoleHeight = clamp(r.bottom - e.clientY, 70, Math.max(70, r.height - 120));
+                applyLayout();
+            },
+            onKey: step => {
+                const r = $('#output-pane').getBoundingClientRect();
+                layout.consoleHeight = clamp(layout.consoleHeight - step * 20, 70, Math.max(70, r.height - 120));
+                applyLayout();
+            },
+        });
+
+        sections.forEach((section, i) => {
+            section.querySelector('.section-toggle').addEventListener('click', () => {
+                layout.collapsed[i] = !layout.collapsed[i];
+                applyLayout();
+                saveLayout();
+            });
+        });
+
+        $('#console-toggle').addEventListener('click', () => {
+            settings.consoleOpen = !settings.consoleOpen;
+            applyLayout();
+            saveSettings();
+        });
+
+        $('#layout-btn').addEventListener('click', () => {
+            settings.layout = isRows() ? 'columns' : 'rows';
+            applyLayout();
+            saveSettings();
+        });
+
+        // Device width presets
+        const deviceSelect = $('#device-select');
+        function applyDevice() {
+            const fixed = settings.device !== 'responsive';
+            stage.classList.toggle('fixed', fixed);
+            if (fixed) stage.style.setProperty('--device-w', `${settings.device}px`);
+            deviceSelect.value = settings.device;
+            updateSizeBadge();
+        }
+        deviceSelect.addEventListener('change', () => {
+            settings.device = deviceSelect.value;
+            applyDevice();
+            saveSettings();
+        });
+
+        function updateSizeBadge() {
+            const target = frame && frame.isConnected ? frame : stage;
+            const w = Math.round(target.clientWidth);
+            const h = Math.round(target.clientHeight);
+            $('#size-badge').textContent = w && h ? `${w} × ${h}` : '';
+        }
+        new ResizeObserver(updateSizeBadge).observe(stage);
+
+        // Narrow screens: tabbed panels
+        function setMobileTab(tab) {
+            document.body.dataset.mtab = tab;
+            $$('.mobile-tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+            if (tab === 'preview' && dirtySinceRun) run();
+        }
+        $$('.mobile-tabs [data-tab]').forEach(btn => btn.addEventListener('click', () => setMobileTab(btn.dataset.tab)));
+
+        /** Make sure an editor is visible (expand it / switch tab) before focusing it. */
+        function revealEditor(lang) {
+            const i = LANGS.indexOf(lang);
+            if (layout.collapsed[i]) {
+                layout.collapsed[i] = false;
+                applyLayout();
+                saveLayout();
+            }
+            if (window.matchMedia('(max-width: 760px)').matches) setMobileTab(lang);
         }
 
-        // ── Download ──────────────────────────────────────────────────────────
-        function downloadHTML() {
-            const htmlCode = document.getElementById('html').value;
-            const cssCode  = document.getElementById('css').value;
-            const jsCode   = document.getElementById('js').value;
+        // ══════════════════════════════════════════════════════════════════════
+        //  Project switching, dialogs, import / export / share
+        // ══════════════════════════════════════════════════════════════════════
+        const projectNameInput = $('#project-name');
 
-            const fullHTML = `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Downloaded Web App</title>
-    <style>
-${cssCode}
-    </style>
-</head>
-<body>
-${htmlCode}
-    <script>
-${jsCode}
-    <\/script>
-</body>
-</html>`;
+        function showProject(p, { runNow = true } = {}) {
+            project = p;
+            storage.write(KEYS.current, p.id);
+            projectNameInput.value = p.name;
+            document.title = `${p.name} · Web App Prototyping`;
+            for (const lang of LANGS) editors[lang].load(p[lang] || '');
+            consoleUI.clear();
+            dirtySinceRun = true;
+            if (runNow) run();
+        }
 
-            const blob = new Blob([fullHTML], { type: 'text/html' });
-            const url  = URL.createObjectURL(blob);
-            const a    = document.createElement('a');
-            a.href     = url;
-            a.download = 'web_app.html';
-            document.body.appendChild(a);
+        function switchProject(p) {
+            saveSoon.flush();
+            showProject(p);
+        }
+
+        projectNameInput.addEventListener('input', () => {
+            project.name = projectNameInput.value.trim() || 'Untitled';
+            document.title = `${project.name} · Web App Prototyping`;
+            saveSoon();
+        });
+        projectNameInput.addEventListener('blur', () => { projectNameInput.value = project.name; });
+        projectNameInput.addEventListener('keydown', e => { if (e.key === 'Enter') projectNameInput.blur(); });
+
+        // Projects dialog
+        const projectsDialog = $('#projects-dialog');
+
+        function renderProjectList() {
+            saveSoon.flush();
+            const list = Object.values(readProjects()).sort((a, b) => b.updated - a.updated);
+            $('#project-list').replaceChildren(...list.map(p => {
+                const isCurrent = p.id === project.id;
+                return el('li', { class: `project-item${isCurrent ? ' current' : ''}` },
+                    el('button', {
+                        type: 'button', class: 'project-open', 'aria-current': isCurrent ? 'true' : null,
+                        onclick: () => { if (!isCurrent) switchProject(p); projectsDialog.close(); },
+                    },
+                        el('span', { class: 'project-title' }, p.name || 'Untitled'),
+                        el('span', { class: 'project-meta' }, `${isCurrent ? 'Open now · ' : ''}Edited ${relativeTime(p.updated)}`)),
+                    el('button', {
+                        type: 'button', class: 'btn btn-icon', title: 'Duplicate', 'aria-label': `Duplicate ${p.name}`,
+                        onclick: () => {
+                            const { id, created, updated, ...rest } = isCurrent ? project : p;
+                            persistProject(newProject({ ...rest, name: `${rest.name} (copy)` }));
+                            renderProjectList();
+                        },
+                    }, icon('copy')),
+                    el('button', {
+                        type: 'button', class: 'btn btn-icon btn-danger', title: 'Delete', 'aria-label': `Delete ${p.name}`,
+                        onclick: () => {
+                            if (!confirm(`Delete “${p.name}”? This can’t be undone.`)) return;
+                            removeProject(p.id);
+                            if (isCurrent) {
+                                const remaining = Object.values(readProjects()).sort((a, b) => b.updated - a.updated);
+                                const next = remaining[0] || newProject();
+                                if (!remaining.length) persistProject(next);
+                                showProject(next);
+                            }
+                            renderProjectList();
+                        },
+                    }, icon('trash')));
+            }));
+        }
+
+        $('#projects-btn').addEventListener('click', () => {
+            renderProjectList();
+            projectsDialog.showModal();
+        });
+
+        $('#new-project-btn').addEventListener('click', () => {
+            const p = newProject();
+            persistProject(p);
+            switchProject(p);
+            projectsDialog.close();
+            projectNameInput.focus();
+            projectNameInput.select();
+        });
+
+        // Import an HTML file (e.g. one previously downloaded from here) as a new project.
+        const joinBlocks = blocks => {
+            const text = blocks.filter(Boolean).join('\n\n');
+            return text ? text + '\n' : '';
+        };
+
+        function parseHtmlFile(text, fileName) {
+            const doc = new DOMParser().parseFromString(text, 'text/html');
+            const resources = [];
+            const css = [];
+            const js = [];
+            let jsModule = false;
+
+            for (const node of [...doc.querySelectorAll('link[rel~="stylesheet"][href], script[src]')]) {
+                resources.push(node.getAttribute('href') || node.getAttribute('src'));
+                node.remove();
+            }
+            for (const node of [...doc.querySelectorAll('style')]) {
+                css.push(node.textContent.trim());
+                node.remove();
+            }
+            for (const node of [...doc.querySelectorAll('script')]) {
+                const type = (node.getAttribute('type') || '').toLowerCase();
+                if (type && !['module', 'text/javascript', 'application/javascript'].includes(type)) continue; // e.g. importmap, JSON
+                if (type === 'module') jsModule = true;
+                js.push(node.textContent.trim());
+                node.remove();
+            }
+            const head = [...doc.head.children]
+                .filter(n => !(n.matches('meta[charset], meta[name="viewport"], title')))
+                .map(n => n.outerHTML)
+                .join('\n');
+
+            return {
+                name: doc.title.trim() || fileName.replace(/\.html?$/i, '') || 'Imported',
+                html: doc.body.innerHTML.trim() + '\n',
+                css: joinBlocks(css),
+                js: joinBlocks(js),
+                resources, head, jsModule,
+            };
+        }
+
+        const importInput = $('#import-file');
+        $('#import-btn').addEventListener('click', () => importInput.click());
+        importInput.addEventListener('change', async () => {
+            const file = importInput.files[0];
+            importInput.value = '';
+            if (!file) return;
+            try {
+                const p = newProject(parseHtmlFile(await file.text(), file.name));
+                persistProject(p);
+                switchProject(p);
+                projectsDialog.close();
+                toast(`Imported “${p.name}”`, 'success');
+            } catch (err) {
+                toast(`Couldn’t import that file: ${err.message}`, 'error');
+            }
+        });
+
+        // Settings dialog
+        const settingsDialog = $('#settings-dialog');
+        $('#settings-btn').addEventListener('click', () => {
+            $('#resources-input').value = (project.resources || []).join('\n');
+            $('#head-input').value = project.head || '';
+            $('#module-input').checked = !!project.jsModule;
+            $('#wrap-input').checked = !!settings.wrap;
+            settingsDialog.returnValue = '';
+            settingsDialog.showModal();
+        });
+        settingsDialog.addEventListener('close', () => {
+            if (settingsDialog.returnValue !== 'save') return;
+            project.resources = $('#resources-input').value.split('\n').map(s => s.trim()).filter(Boolean);
+            project.head = $('#head-input').value.trim();
+            project.jsModule = $('#module-input').checked;
+            saveNow();
+            const wrap = $('#wrap-input').checked;
+            if (wrap !== settings.wrap) {
+                settings.wrap = wrap;
+                saveSettings();
+                Object.values(editors).forEach(ed => ed.setWrap(wrap));
+            }
+            run();
+        });
+
+        // Download / open in a new tab
+        function exportBlob() {
+            return new Blob([buildDocument(project)], { type: 'text/html' });
+        }
+
+        $('#download-btn').addEventListener('click', () => {
+            const url = URL.createObjectURL(exportBlob());
+            const a = el('a', { href: url, download: `${slugify(project.name)}.html` });
+            document.body.append(a);
             a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        });
+
+        $('#open-tab-btn').addEventListener('click', () => {
+            const url = URL.createObjectURL(exportBlob());
+            const win = window.open(url, '_blank');
+            if (!win) toast('The new tab was blocked — allow pop-ups for this page.', 'warn');
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        });
+
+        // Share links: the whole project, deflate-compressed into the URL hash.
+        const toBase64Url = bytes => {
+            let binary = '';
+            for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+            return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        };
+        const fromBase64Url = text => Uint8Array.from(atob(text.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+
+        async function encodeShare(p) {
+            const json = JSON.stringify({ v: 1, n: p.name, h: p.html, c: p.css, j: p.js, r: p.resources, hd: p.head, m: p.jsModule });
+            const stream = new Blob([json]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+            return toBase64Url(new Uint8Array(await new Response(stream).arrayBuffer()));
         }
 
-        // ── Init ──────────────────────────────────────────────────────────────
-        loadState();
+        async function decodeShare(text) {
+            const stream = new Blob([fromBase64Url(text)]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+            const d = JSON.parse(await new Response(stream).text());
+            return {
+                name: String(d.n || 'Shared project'),
+                html: String(d.h || ''), css: String(d.c || ''), js: String(d.j || ''),
+                resources: Array.isArray(d.r) ? d.r.map(String) : [],
+                head: String(d.hd || ''), jsModule: !!d.m,
+            };
+        }
+
+        $('#share-btn').addEventListener('click', async () => {
+            let url;
+            try {
+                url = `${location.href.split('#')[0]}#p=${await encodeShare(project)}`;
+            } catch {
+                toast('Share links aren’t supported in this browser.', 'error');
+                return;
+            }
+            const note = location.protocol === 'file:' ? ' It opens wherever this same file is available.' : '';
+            try {
+                await navigator.clipboard.writeText(url);
+                toast(`Share link copied to the clipboard.${note}`, 'success', 5000);
+            } catch {
+                window.prompt('Copy this share link:', url);
+            }
+        });
+
+        async function openSharedFromHash() {
+            const match = location.hash.match(/^#p=([\w-]+)$/);
+            if (!match) return false;
+            history.replaceState(null, '', location.pathname + location.search);
+            try {
+                const p = newProject(await decodeShare(match[1]));
+                persistProject(p);
+                switchProject(p);
+                toast(`Opened shared project “${p.name}” — it’s been saved to your projects.`, 'success', 5000);
+                return true;
+            } catch {
+                toast('That share link looks incomplete or broken.', 'error');
+                return false;
+            }
+        }
+        window.addEventListener('hashchange', openSharedFromHash);
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  Keyboard shortcuts (capture phase, so they work inside CodeMirror too)
+        // ══════════════════════════════════════════════════════════════════════
+        document.addEventListener('keydown', e => {
+            const mod = e.ctrlKey || e.metaKey;
+            if (mod && e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                run();
+            } else if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's') {
+                e.preventDefault();
+                saveNow();
+                toast('Saved', 'success', 1500);
+            } else if (e.shiftKey && e.altKey && !mod && e.code === 'KeyF') {
+                const lang = LANGS.find(l => editors[l].host.contains(document.activeElement));
+                if (lang) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    formatEditor(lang);
+                }
+            }
+        }, true);
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  Start-up
+        // ══════════════════════════════════════════════════════════════════════
+        autoRunInput.checked = settings.autoRun;
+        clearOnRunInput.checked = settings.clearOnRun;
+        consoleUI.setFilter(settings.consoleFilter);
+        applyLayout();
+        applyDevice();
+
+        const crashedLastTime = !!storage.readRaw(KEYS.pending);
+        storage.remove(KEYS.pending);
+
+        const openedShared = await openSharedFromHash();
+        if (!openedShared) {
+            showProject(project, { runNow: false });
+            if (crashedLastTime) {
+                autoRunPaused = true;
+                showStagePlaceholder('The last run didn’t finish (an infinite loop?). Auto-run is paused — fix the code, then press Run.');
+                toast('The previous run never finished, so the preview wasn’t started automatically.', 'warn', 7000);
+            } else {
+                run();
+            }
+        }
+
+        loadCodeMirror().catch(err => {
+            console.warn('CodeMirror failed to load:', err);
+            toast('The code editor couldn’t be loaded (offline?). Using plain text editors instead.', 'warn', 6000);
+        });
     </script>
 </body>
 </html>
